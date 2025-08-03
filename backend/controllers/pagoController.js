@@ -4,7 +4,39 @@ const Cliente = require('../models/Cliente');
 const pagoController = {
   async getPagos(req, res) {
     try {
-      const pagos = await Pago.find()
+      // Verificar si se está filtrando por cliente
+      const { clienteId, documento } = req.query;
+      let query = {};
+      
+      // Si se proporciona clienteId o documento, filtrar por ese cliente
+      if (clienteId || documento) {
+        // Si tenemos documento pero no clienteId, primero buscar el cliente
+        if (documento && !clienteId) {
+          try {
+            const Cliente = require('../models/Cliente');
+            const cliente = await Cliente.findOne({ numeroDocumento: documento });
+            if (cliente) {
+              // Si encontramos el cliente, usar su ID para filtrar
+              query = { 'ventas.beneficiarioId.clienteId': cliente._id };
+            } else {
+              // Si no encontramos el cliente, devolver array vacío
+              return res.json({
+                success: true,
+                data: [],
+                total: 0,
+                message: 'No se encontró cliente con ese documento'
+              });
+            }
+          } catch (error) {
+            console.error('Error buscando cliente por documento:', error);
+          }
+        } else if (clienteId) {
+          // Si tenemos clienteId, filtrar directamente
+          query = { 'ventas.beneficiarioId.clienteId': clienteId };
+        }
+      }
+      
+      const pagos = await Pago.find(query)
         .populate({
           path: 'ventas',
           populate: [{

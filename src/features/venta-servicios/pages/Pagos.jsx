@@ -813,7 +813,14 @@ const Pagos = () => {
   const fetchPagos = async () => {
     try {
       console.log('=== FETCHING PAGOS ===');
-      const response = await axios.get('http://localhost:3000/api/pagos');
+      
+      // Si el usuario es cliente, enviar su documento para filtrar en el backend
+      let url = 'http://localhost:3000/api/pagos';
+      if (isCliente && user?.documento) {
+        url += `?documento=${user.documento}`;
+      }
+      
+      const response = await axios.get(url);
       console.log('API Response:', response.data);
       
       if (response.data && response.data.success) {
@@ -824,30 +831,15 @@ const Pagos = () => {
           valorTotal: pago.valor_total || pago.ventas?.valor_total || 0
         }));
         
-        // Si el usuario es cliente, filtrar solo sus pagos
-        if (isCliente) {
-          try {
-            // Buscar el cliente asociado al usuario logueado
-            const clienteResponse = await axios.get(`http://localhost:3000/api/clientes?documento=${user.documento}`);
-            if (clienteResponse.data && clienteResponse.data.length > 0) {
-              const clienteId = clienteResponse.data[0]._id;
-              
-              // Filtrar pagos que pertenezcan a este cliente
-              pagosFormateados = pagosFormateados.filter(pago => {
-                // Verificar si el pago está asociado a este cliente
-                const beneficiario = pago.ventas?.beneficiario;
-                if (beneficiario && beneficiario.clienteId) {
-                  return String(beneficiario.clienteId) === String(clienteId);
-                }
-                return false;
-              });
-              
-              console.log('Pagos filtrados para cliente:', pagosFormateados);
-            }
-          } catch (error) {
-            console.error('Error al obtener datos del cliente:', error);
-          }
+        // Si no hay pagos, mostrar mensaje
+        if (pagosFormateados.length === 0 && isCliente) {
+          setAlert({
+            open: true,
+            message: 'No tienes pagos registrados'
+          });
         }
+        
+        console.log('Pagos recibidos:', pagosFormateados);
         
         // Agrupar pagos por beneficiario
         const pagosAgrupados = agruparPagosPorBeneficiario(pagosFormateados);
