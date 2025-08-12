@@ -8,7 +8,7 @@ import { StatusButton } from "../../../shared/components/StatusButton"
 import { UserRoleAssignment } from "../../../shared/components/UserRoleAssignment"
 import { ConfirmationDialog } from '../../../shared/components/ConfirmationDialog'
 import axios from 'axios'
-import { Button, Box, Typography, Chip } from "@mui/material"
+import { Button, Box, Typography, Chip, Alert, Snackbar } from "@mui/material"
 import { PersonAdd as PersonAddIcon } from "@mui/icons-material"
 import { usuariosService, rolesService, usuariosHasRolService } from "../../../shared/services/api"
 import { toast } from 'react-toastify'
@@ -26,6 +26,11 @@ const Usuarios = () => {
     title: '',
     message: '',
     onConfirm: null
+  })
+  const [alert, setAlert] = useState({
+    open: false,
+    message: '',
+    severity: 'success'
   })
 
   const fetchData = async () => {
@@ -196,6 +201,47 @@ const Usuarios = () => {
 
   const handleSubmit = async (formData) => {
     try {
+      // Validar campos requeridos
+      if (!formData.nombre || !formData.apellido || !formData.correo || !formData.tipo_de_documento || !formData.documento) {
+        setAlert({
+          open: true,
+          message: 'Por favor complete todos los campos obligatorios',
+          severity: 'error'
+        });
+        return;
+      }
+
+      // Validar formato de correo
+      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+      if (!emailRegex.test(formData.correo)) {
+        setAlert({
+          open: true,
+          message: 'El formato del correo electrónico no es válido',
+          severity: 'error'
+        });
+        return;
+      }
+
+      // Validar contraseña si es un nuevo usuario
+      if (!isEditing && (!formData.contrasena || formData.contrasena.length < 8)) {
+        setAlert({
+          open: true,
+          message: 'La contraseña debe tener al menos 8 caracteres',
+          severity: 'error'
+        });
+        return;
+      }
+
+      // Validar que las contraseñas coincidan
+      if (!isEditing && formData.contrasena !== formData.confirmacionContrasena) {
+        setAlert({
+          open: true,
+          message: 'Las contraseñas no coinciden',
+          severity: 'error'
+        });
+        return;
+      }
+
       const { confirmacionContrasena, rolId, contrasena, telefono, direccion, especialidades, ...userData } = formData;
 
       // Verificar si el rol seleccionado es de profesor (solo para creación)
@@ -250,6 +296,13 @@ const Usuarios = () => {
           toast.success('Usuario actualizado correctamente');
         }
 
+        // Mostrar alerta de éxito
+        setAlert({
+          open: true,
+          message: 'Usuario actualizado correctamente',
+          severity: 'success'
+        });
+        
         // Recargar datos
         await fetchData();
       } else {
@@ -257,6 +310,13 @@ const Usuarios = () => {
         const newUser = await usuariosService.create({
           ...userData,
           contrasena // Solo incluimos la contraseña al crear
+        });
+        
+        // Mostrar alerta de éxito para la creación
+        setAlert({
+          open: true,
+          message: 'Usuario creado correctamente',
+          severity: 'success'
         });
         
         if (!newUser || !newUser._id) {
@@ -330,6 +390,11 @@ const Usuarios = () => {
       handleCloseForm();
     } catch (error) {
       console.error('Error al guardar usuario:', error);
+      setAlert({
+        open: true,
+        message: `Error: ${error.message || 'Ocurrió un error al procesar la solicitud'}`,
+        severity: 'error'
+      });
       toast.error(`Error: ${error.message || 'Ocurrió un error al procesar la solicitud'}`);
     }
   };
@@ -676,8 +741,50 @@ const Usuarios = () => {
     { id: "estado", label: "Estado", render: (value) => <StatusButton active={value} /> },
   ]
 
+  // Función para cerrar la alerta
+  const handleCloseAlert = (event, reason) => {
+    if (reason === 'clickaway') {
+      return;
+    }
+    setAlert({
+      ...alert,
+      open: false
+    });
+  };
+
+  // Efecto para cerrar automáticamente la alerta después de mostrarla
+  useEffect(() => {
+    if (alert.open) {
+      const timer = setTimeout(() => {
+        setAlert({
+          ...alert,
+          open: false
+        });
+      }, 1000); // 1 segundo
+      
+      return () => clearTimeout(timer);
+    }
+  }, [alert.open, alert.message]);
+
   return (
     <div className="usuarios-container">
+      <Snackbar 
+        open={alert.open} 
+        autoHideDuration={6000} 
+        onClose={handleCloseAlert}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        sx={{ marginTop: '60px' }}
+      >
+        <Alert 
+          onClose={handleCloseAlert} 
+          severity={alert.severity} 
+          variant="filled"
+          sx={{ width: '100%', fontSize: '1rem', padding: '10px 16px' }}
+        >
+          {alert.message}
+        </Alert>
+      </Snackbar>
+
       <GenericList
         data={usuarios}
         columns={columns}

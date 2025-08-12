@@ -11,6 +11,7 @@ import {
   Divider,
   Menu,
   MenuItem,
+  Alert,
 } from '@mui/material';
 import { Person, Visibility, VisibilityOff, Close } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -20,6 +21,8 @@ const AccountSettings = () => {
   const { user, updateUser } = useAuth();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
   const [formData, setFormData] = useState({
     nombre: user?.name?.split(' ')[0] || '',
     apellido: user?.name?.split(' ').slice(1).join(' ') || '',
@@ -27,7 +30,8 @@ const AccountSettings = () => {
     documento: user?.documento || '',
     email: user?.email || '',
     rolPrincipal: user?.role || '',
-    password: '********'
+    password: '********',
+    confirmPassword: '********'
   });
 
   const handleChange = (e) => {
@@ -40,7 +44,20 @@ const AccountSettings = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    updateUser(formData);
+    
+    // Verificar que las contraseñas coincidan si se está cambiando la contraseña
+    if (formData.password !== '********') {
+      if (formData.password !== formData.confirmPassword) {
+        setPasswordError('Las contraseñas no coinciden');
+        return;
+      }
+    }
+    
+    // Eliminar confirmPassword antes de enviar al backend
+    const formDataToSubmit = { ...formData };
+    delete formDataToSubmit.confirmPassword;
+    
+    updateUser(formDataToSubmit);
   };
 
   const handleClose = () => {
@@ -174,6 +191,32 @@ const AccountSettings = () => {
                 }}
               />
             </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Confirmar Contraseña"
+                name="confirmPassword"
+                type={showConfirmPassword ? 'text' : 'password'}
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                variant="outlined"
+                InputProps={{
+                  endAdornment: formData.confirmPassword !== '********' && (
+                    <IconButton
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      edge="end"
+                    >
+                      {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  ),
+                }}
+              />
+            </Grid>
+            {passwordError && (
+              <Grid item xs={12}>
+                <Alert severity="error">{passwordError}</Alert>
+              </Grid>
+            )}
             <Grid item xs={12}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
                 <Button

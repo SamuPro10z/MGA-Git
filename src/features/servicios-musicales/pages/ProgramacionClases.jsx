@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
@@ -926,6 +925,14 @@ const ProgramacionClases = () => {
                                 variant="caption"
                                 sx={{ display: "flex", alignItems: "center", gap: 0.3, fontSize: "0.7rem" }}
                               >
+                                {/* Agregar info del aula */}
+                                <AssignmentIcon fontSize="inherit" />
+                                Aula: {clasePrincipal.aula}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                sx={{ display: "flex", alignItems: "center", gap: 0.3, fontSize: "0.7rem" }}
+                              >
                                 <GroupIcon fontSize="inherit" />
                                 <Badge
                                   badgeContent={numBeneficiarios}
@@ -1210,10 +1217,17 @@ const ProgramacionClases = () => {
                     <strong>Hora:</strong> {selectedClase.hora}
                   </Typography>
                 </Grid>
-                <Grid item xs={12}>
+                <Grid item xs={6}>
                   <Typography variant="body2" sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 1 }}>
                     <PersonIcon fontSize="inherit" />
                     <strong>Profesor:</strong> {selectedClase.profesor}
+                  </Typography>
+                </Grid>
+                {/* Agregar Grid item para el aula */}
+                <Grid item xs={6}>
+                  <Typography variant="body2" sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 1 }}>
+                    <AssignmentIcon fontSize="inherit" />
+                    <strong>Aula:</strong> {selectedClase.aula}
                   </Typography>
                 </Grid>
 
@@ -1565,6 +1579,10 @@ const ProgramacionClases = () => {
                     <Typography variant="caption" sx={{ display: "flex", alignItems: "center", gap: 0.3, fontSize: "0.7rem" }}>
                       <PersonIcon fontSize="inherit" />
                       {clase.profesor}
+                    </Typography>
+                    <Typography variant="caption" sx={{ display: "flex", alignItems: "center", gap: 0.3, fontSize: "0.7rem" }}>
+                      <AssignmentIcon fontSize="inherit" />
+                      Aula: {clase.aula}
                     </Typography>
                     <Typography variant="caption" sx={{ display: "flex", alignItems: "center", gap: 0.3, fontSize: "0.7rem" }}>
                       <GroupIcon fontSize="inherit" />

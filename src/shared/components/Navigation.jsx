@@ -149,12 +149,7 @@ const Navigation = () => {
           icon: <MeetingRoom />,
           permission: "servicios-musicales-aulas",
         },
-        {
-          label: "Clases",
-          path: "/servicios-musicales/clases",
-          icon: <Class />,
-          permission: "servicios-musicales-clases",
-        },
+        
       ],
     },
     

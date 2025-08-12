@@ -1,4 +1,5 @@
 "use client"
+
 import { useState, useEffect } from "react"
 import {
   Dialog,
@@ -23,13 +24,9 @@ import {
   Alert,
   IconButton,
   InputAdornment,
-  CircularProgress,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemAvatar,
   Avatar,
   Divider,
+  Autocomplete,
 } from "@mui/material"
 import {
   Person as PersonIcon,
@@ -38,6 +35,7 @@ import {
   Close as CloseIcon,
   Search as SearchIcon,
   AttachMoney as AttachMoneyIcon,
+  PersonAdd as PersonAddIcon,
 } from "@mui/icons-material"
 
 export const VentaMatriculasForm = ({
@@ -58,14 +56,17 @@ export const VentaMatriculasForm = ({
   const [activeStep, setActiveStep] = useState(0)
   const [transition, setTransition] = useState("slideLeft")
   const [alertMessage, setAlertMessage] = useState({ show: false, message: "", severity: "info" })
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [selectedBeneficiario, setSelectedBeneficiario] = useState(null)
+  const [isFormSubmitting, setIsFormSubmitting] = useState(false)
 
-  // Definir los pasos del formulario - condicional para curso
+  // Definir los pasos del formulario - Matrícula siempre primero
   const getSteps = () => {
-    const baseSteps = ["Datos del Cliente", "Datos del Beneficiario", "Datos de la Matrícula"]
-    if (!isEditing) {
-      baseSteps.push("Datos del Curso")
+    if (showCreateForm) {
+      return ["Datos de la Matrícula", "Datos del Cliente", "Datos del Beneficiario", "Datos del Curso"]
+    } else {
+      return ["Datos de la Matrícula", "Datos del Curso"]
     }
-    return baseSteps
   }
 
   const steps = getSteps()
@@ -124,6 +125,13 @@ export const VentaMatriculasForm = ({
     estado: "debe",
   })
 
+  const [pagoData, setPagoData] = useState({
+    fechaPago: "",
+    metodoPago: "Efectivo",
+    valor_total: "0",
+    numeroTransaccion: "",
+  })
+
   // Estados para búsqueda y filtrado
   const [clienteSearchTerm, setClienteSearchTerm] = useState("")
   const [beneficiarioSearchTerm, setBeneficiarioSearchTerm] = useState("")
@@ -146,6 +154,28 @@ export const VentaMatriculasForm = ({
     { value: "RC", label: "Registro Civil (RC)" },
     { value: "NIT", label: "NIT" },
   ]
+
+  // Filtrar beneficiarios disponibles (sin "cliente" en clienteId y sin matrícula activa)
+  const getBeneficiariosDisponibles = () => {
+    return beneficiarios.filter((beneficiario) => {
+      // Excluir los que tienen "cliente" en clienteId (son solo clientes)
+      const clienteIdStr = String(beneficiario.clienteId || "").toLowerCase()
+      if (clienteIdStr.includes("cliente")) {
+        return false
+      }
+
+      // Excluir los que ya tienen matrícula activa
+      const tieneMatriculaActiva = ventasOriginales.some((venta) => {
+        return (
+          venta._original.tipo === "matricula" &&
+          venta._original.estado === "vigente" &&
+          String(venta._original.beneficiarioId) === String(beneficiario._id)
+        )
+      })
+
+      return !tieneMatriculaActiva
+    })
+  }
 
   // Función para capitalizar la primera letra
   const capitalizeFirstLetter = (string) => {
@@ -178,37 +208,103 @@ export const VentaMatriculasForm = ({
     return age
   }
 
-  // Efecto para manejar el checkbox de cliente es beneficiario
-  useEffect(() => {
-    if (!clienteEsBeneficiario) {
-      setBeneficiarioData({
-        id: null,
-        nombre: "",
-        apellido: "",
-        tipoDocumento: "",
-        numeroDocumento: "",
-        fechaNacimiento: "",
-        age: "",
-        direccion: "",
-        telefono: "",
-        correo: "",
-        estado: true,
-        password: "",
-        confirmPassword: "",
+  // Función para cargar datos del beneficiario seleccionado
+  const handleBeneficiarioSelection = (beneficiario) => {
+    if (!beneficiario) {
+      setSelectedBeneficiario(null)
+      return
+    }
+
+    setSelectedBeneficiario(beneficiario)
+
+    // Cargar datos del beneficiario
+    setBeneficiarioData({
+      id: beneficiario._id,
+      nombre: beneficiario.nombre || "",
+      apellido: beneficiario.apellido || "",
+      tipoDocumento: beneficiario.tipo_de_documento || "TI",
+      numeroDocumento: beneficiario.numero_de_documento || "",
+      fechaNacimiento: formatDateInput(beneficiario.fechaDeNacimiento),
+      age: calculateAge(beneficiario.fechaDeNacimiento),
+      direccion: beneficiario.direccion || "",
+      telefono: beneficiario.telefono || "",
+      correo: beneficiario.correo || "",
+      estado: beneficiario.estado !== undefined ? beneficiario.estado : true,
+      password: "",
+      confirmPassword: "",
+    })
+
+    // Determinar si es cliente-beneficiario o buscar el cliente
+    const clienteIdStr = String(beneficiario.clienteId || "")
+    const beneficiarioIdStr = String(beneficiario._id)
+
+    if (clienteIdStr === beneficiarioIdStr) {
+      // Es cliente-beneficiario (su propio cliente)
+      setClienteEsBeneficiario(true)
+      setClienteData({
+        id: beneficiario._id,
+        nombre: beneficiario.nombre || "",
+        apellido: beneficiario.apellido || "",
+        tipoDocumento: beneficiario.tipo_de_documento || "CC",
+        numeroDocumento: beneficiario.numero_de_documento || "",
+        fechaNacimiento: formatDateInput(beneficiario.fechaDeNacimiento),
+        age: calculateAge(beneficiario.fechaDeNacimiento),
+        direccion: beneficiario.direccion || "",
+        telefono: beneficiario.telefono || "",
+        estado: beneficiario.estado !== undefined ? beneficiario.estado : true,
       })
     } else {
-      setBeneficiarioData({
+      // Buscar el cliente real
+      setClienteEsBeneficiario(false)
+      const clienteReal = beneficiarios.find((b) => String(b._id) === clienteIdStr)
+      if (clienteReal) {
+        setClienteData({
+          id: clienteReal._id,
+          nombre: clienteReal.nombre || "",
+          apellido: clienteReal.apellido || "",
+          tipoDocumento: clienteReal.tipo_de_documento || "",
+          numeroDocumento: clienteReal.numero_de_documento || "",
+          fechaNacimiento: formatDateInput(clienteReal.fechaDeNacimiento),
+          age: calculateAge(clienteReal.fechaDeNacimiento),
+          direccion: clienteReal.direccion || "",
+          telefono: clienteReal.telefono || "",
+          estado: clienteReal.estado !== undefined ? clienteReal.estado : true,
+        })
+      }
+    }
+
+    // Al final de la función handleBeneficiarioSelection, después de todo el código existente, agregar:
+    // Actualizar datos de matrícula con los nombres
+    const clienteReal = beneficiarios.find((b) => String(b._id) === clienteIdStr)
+    setMatriculaData((prev) => ({
+      ...prev,
+      cliente: clienteEsBeneficiario
+        ? `${beneficiario.nombre} ${beneficiario.apellido}`
+        : clienteReal
+          ? `${clienteReal.nombre} ${clienteReal.apellido}`
+          : `${beneficiario.nombre} ${beneficiario.apellido}`,
+      beneficiario: `${beneficiario.nombre} ${beneficiario.apellido}`,
+    }))
+  }
+
+  // CORREGIR: Efecto para manejar el checkbox de cliente es beneficiario
+  useEffect(() => {
+    if (clienteEsBeneficiario && showCreateForm && clienteData.nombre) {
+      // Solo copiar datos del cliente al beneficiario si estamos en modo creación Y hay datos del cliente
+      setBeneficiarioData((prev) => ({
         ...clienteData,
         id: null,
-        tipoDocumento: "",
-        correo: "",
-        password: "",
-        confirmPassword: "",
-      })
+        tipoDocumento: clienteData.tipoDocumento || "TI",
+        correo: prev.correo || "",
+        password: prev.password || "",
+        confirmPassword: prev.confirmPassword || "",
+      }))
     }
-  }, [clienteEsBeneficiario, clienteData])
+    // NO resetear beneficiarioData cuando clienteEsBeneficiario es false
+    // Esto permite mantener la información del beneficiario cuando son personas diferentes
+  }, [clienteEsBeneficiario, clienteData, showCreateForm])
 
-  // Inicializar datos si estamos editando (CORREGIDO)
+  // Inicializar datos si estamos editando
   useEffect(() => {
     if (open) {
       console.log("Modal abierto, isEditing:", isEditing, "initialData:", initialData)
@@ -235,95 +331,11 @@ export const VentaMatriculasForm = ({
         }
 
         if (beneficiario) {
-          console.log("Beneficiario encontrado:", beneficiario)
+          // En modo edición, saltar el paso de selección
+          setActiveStep(1)
+          handleBeneficiarioSelection(beneficiario)
 
-          // Determinar la relación cliente-beneficiario basado en la lógica correcta
-          const clienteIdStr = String(beneficiario.clienteId || "")
-          const beneficiarioIdStr = String(beneficiario._id)
-
-          console.log("ClienteId:", clienteIdStr, "BeneficiarioId:", beneficiarioIdStr)
-
-          // Cliente es beneficiario si clienteId === _id del beneficiario
-          const esClienteBeneficiario = clienteIdStr === beneficiarioIdStr
-
-          console.log("Es cliente beneficiario:", esClienteBeneficiario)
-          setClienteEsBeneficiario(esClienteBeneficiario)
-
-          // Cargar datos del beneficiario
-          const beneficiarioDataToSet = {
-            id: beneficiario._id,
-            nombre: beneficiario.nombre || "",
-            apellido: beneficiario.apellido || "",
-            tipoDocumento: beneficiario.tipo_de_documento || "TI",
-            numeroDocumento: beneficiario.numero_de_documento || "",
-            fechaNacimiento: formatDateInput(beneficiario.fechaDeNacimiento),
-            age: calculateAge(beneficiario.fechaDeNacimiento),
-            direccion: beneficiario.direccion || "",
-            telefono: beneficiario.telefono || "",
-            correo: beneficiario.correo || "",
-            estado: beneficiario.estado !== undefined ? beneficiario.estado : true,
-            password: "",
-            confirmPassword: "",
-          }
-
-          console.log("Datos del beneficiario a cargar:", beneficiarioDataToSet)
-          setBeneficiarioData(beneficiarioDataToSet)
-
-          if (esClienteBeneficiario) {
-            // Cliente es el mismo beneficiario
-            const clienteDataToSet = {
-              id: beneficiario._id,
-              nombre: beneficiario.nombre || "",
-              apellido: beneficiario.apellido || "",
-              tipoDocumento: beneficiario.tipo_de_documento || "CC",
-              numeroDocumento: beneficiario.numero_de_documento || "",
-              fechaNacimiento: formatDateInput(beneficiario.fechaDeNacimiento),
-              age: calculateAge(beneficiario.fechaDeNacimiento),
-              direccion: beneficiario.direccion || "",
-              telefono: beneficiario.telefono || "",
-              estado: beneficiario.estado !== undefined ? beneficiario.estado : true,
-            }
-            console.log("Datos del cliente (mismo beneficiario) a cargar:", clienteDataToSet)
-            setClienteData(clienteDataToSet)
-          } else {
-            // Buscar el cliente real por su ID
-            const clienteReal = beneficiarios.find((b) => String(b._id) === clienteIdStr)
-            if (clienteReal) {
-              const clienteDataToSet = {
-                id: clienteReal._id,
-                nombre: clienteReal.nombre || "",
-                apellido: clienteReal.apellido || "",
-                tipoDocumento: clienteReal.tipo_de_documento || "",
-                numeroDocumento: clienteReal.numero_de_documento || "",
-                fechaNacimiento: formatDateInput(clienteReal.fechaDeNacimiento),
-                age: calculateAge(clienteReal.fechaDeNacimiento),
-                direccion: clienteReal.direccion || "",
-                telefono: clienteReal.telefono || "",
-                estado: clienteReal.estado !== undefined ? clienteReal.estado : true,
-              }
-              console.log("Datos del cliente real encontrado:", clienteDataToSet)
-              setClienteData(clienteDataToSet)
-            } else {
-              // Si no se encuentra el cliente, usar datos del beneficiario como fallback
-              console.warn("Cliente no encontrado, usando datos del beneficiario como fallback")
-              const clienteDataFallback = {
-                id: beneficiario._id,
-                nombre: beneficiario.nombre || "",
-                apellido: beneficiario.apellido || "",
-                tipoDocumento: beneficiario.tipo_de_documento || "",
-                numeroDocumento: beneficiario.numero_de_documento || "",
-                fechaNacimiento: formatDateInput(beneficiario.fechaDeNacimiento),
-                age: calculateAge(beneficiario.fechaDeNacimiento),
-                direccion: beneficiario.direccion || "",
-                telefono: beneficiario.telefono || "",
-                estado: beneficiario.estado !== undefined ? beneficiario.estado : true,
-              }
-              console.log("Datos del cliente fallback:", clienteDataFallback)
-              setClienteData(clienteDataFallback)
-            }
-          }
-
-          // Mapear datos de la matrícula (CORREGIDO para usar _original)
+          // Mapear datos de la matrícula
           if (initialData && initialData._original) {
             const ventaOriginal = initialData._original
             const matriculaDataToSet = {
@@ -408,6 +420,13 @@ export const VentaMatriculasForm = ({
       estado: "debe",
     })
 
+    setPagoData({
+      fechaPago: "",
+      metodoPago: "Efectivo",
+      valor_total: "0",
+      numeroTransaccion: "",
+    })
+
     setClienteSearchTerm("")
     setBeneficiarioSearchTerm("")
     setFilteredClientes([])
@@ -421,67 +440,92 @@ export const VentaMatriculasForm = ({
     setAlertMessage({ show: false, message: "", severity: "info" })
     setActiveStep(0)
     setClienteEsBeneficiario(false)
+    setShowCreateForm(false)
+    setSelectedBeneficiario(null)
   }
 
-  // Manejadores para el formulario multi-paso
   const handleNext = () => {
     let isValid = true
 
-    switch (activeStep) {
-      case 0:
-        if (!clienteData.nombre || !clienteData.tipoDocumento || !clienteData.numeroDocumento) {
-          setAlertMessage({
-            show: true,
-            message: "Por favor complete todos los campos obligatorios del cliente",
-            severity: "error",
-          })
-          isValid = false
-        }
-        break
-      case 1:
-        if (!beneficiarioData.nombre || !beneficiarioData.tipoDocumento || !beneficiarioData.numeroDocumento) {
-          setAlertMessage({
-            show: true,
-            message: "Por favor complete todos los campos obligatorios del beneficiario",
-            severity: "error",
-          })
-          isValid = false
-        }
-        if (!isEditing && !beneficiarioData.correo) {
-          setAlertMessage({
-            show: true,
-            message: "Por favor ingrese un correo electrónico para el beneficiario",
-            severity: "error",
-          })
-          isValid = false
-        }
-        if (!isEditing && !beneficiarioData.password) {
-          setAlertMessage({
-            show: true,
-            message: "Por favor ingrese una contraseña para el beneficiario",
-            severity: "error",
-          })
-          isValid = false
-        }
-        if (!isEditing && beneficiarioData.password !== beneficiarioData.confirmPassword) {
-          setAlertMessage({
-            show: true,
-            message: "Las contraseñas no coinciden",
-            severity: "error",
-          })
-          isValid = false
-        }
-        break
-      case 2:
-        if (!matriculaData.fechaInicio || !matriculaData.fechaFin || !matriculaData.matriculaId) {
-          setAlertMessage({
-            show: true,
-            message: "Por favor complete todos los campos obligatorios de la matrícula",
-            severity: "error",
-          })
-          isValid = false
-        }
-        break
+    // Determinar qué estamos validando basado en showCreateForm y activeStep
+    if (showCreateForm) {
+      switch (activeStep) {
+        case 0: // Matrícula
+          if (!matriculaData.fechaInicio || !matriculaData.fechaFin || !matriculaData.matriculaId) {
+            setAlertMessage({
+              show: true,
+              message: "Por favor complete todos los campos obligatorios de la matrícula",
+              severity: "error",
+            })
+            isValid = false
+          }
+          break
+        case 1: // Cliente
+          if (!clienteData.nombre || !clienteData.tipoDocumento || !clienteData.numeroDocumento) {
+            setAlertMessage({
+              show: true,
+              message: "Por favor complete todos los campos obligatorios del cliente",
+              severity: "error",
+            })
+            isValid = false
+          }
+          break
+        case 2: // Beneficiario
+          if (!beneficiarioData.nombre || !beneficiarioData.tipoDocumento || !beneficiarioData.numeroDocumento) {
+            setAlertMessage({
+              show: true,
+              message: "Por favor complete todos los campos obligatorios del beneficiario",
+              severity: "error",
+            })
+            isValid = false
+          }
+          if (!isEditing && !beneficiarioData.correo) {
+            setAlertMessage({
+              show: true,
+              message: "Por favor ingrese un correo electrónico para el beneficiario",
+              severity: "error",
+            })
+            isValid = false
+          }
+          if (!isEditing && !beneficiarioData.password) {
+            setAlertMessage({
+              show: true,
+              message: "Por favor ingrese una contraseña para el beneficiario",
+              severity: "error",
+            })
+            isValid = false
+          }
+          if (!isEditing && beneficiarioData.password !== beneficiarioData.confirmPassword) {
+            setAlertMessage({
+              show: true,
+              message: "Las contraseñas no coinciden",
+              severity: "error",
+            })
+            isValid = false
+          }
+          break
+      }
+    } else {
+      switch (activeStep) {
+        case 0: // Matrícula (cuando no se está creando)
+          if (!selectedBeneficiario) {
+            setAlertMessage({
+              show: true,
+              message: "Por favor seleccione un beneficiario",
+              severity: "error",
+            })
+            isValid = false
+          }
+          if (!matriculaData.fechaInicio || !matriculaData.fechaFin || !matriculaData.matriculaId) {
+            setAlertMessage({
+              show: true,
+              message: "Por favor complete todos los campos obligatorios de la matrícula",
+              severity: "error",
+            })
+            isValid = false
+          }
+          break
+      }
     }
 
     if (isValid) {
@@ -490,8 +534,8 @@ export const VentaMatriculasForm = ({
       setAlertMessage({ show: false, message: "", severity: "info" })
     }
 
-    // Si avanzamos al paso de matrícula, actualizar datos
-    if (activeStep === 1 && isValid) {
+    // Actualizar datos de matrícula cuando sea necesario
+    if (isValid && ((showCreateForm && activeStep === 1) || (!showCreateForm && activeStep === 0))) {
       setMatriculaData((prev) => ({
         ...prev,
         cliente: `${clienteData.nombre} ${clienteData.apellido}`,
@@ -672,27 +716,45 @@ export const VentaMatriculasForm = ({
         ...prev,
         valorFinal: valorFinal >= 0 ? valorFinal.toString() : "0",
       }))
+
+      // Actualizar valor del pago
+      setPagoData((prev) => ({
+        ...prev,
+        valor_total: valorFinal >= 0 ? valorFinal.toString() : "0",
+      }))
     }
   }, [matriculaData.valor, matriculaData.descuento])
 
   // Actualizar edad al cambiar fecha de nacimiento
   useEffect(() => {
-    if (clienteData.fechaNacimiento) {
+    if (clienteData.fechaNacimiento && clienteData.fechaNacimiento.trim() !== "") {
       const edad = calculateAge(clienteData.fechaNacimiento)
       setClienteData((prev) => ({ ...prev, age: edad }))
     }
   }, [clienteData.fechaNacimiento])
 
   useEffect(() => {
-    if (beneficiarioData.fechaNacimiento) {
+    if (beneficiarioData.fechaNacimiento && beneficiarioData.fechaNacimiento.trim() !== "") {
       const edad = calculateAge(beneficiarioData.fechaNacimiento)
       setBeneficiarioData((prev) => ({ ...prev, age: edad }))
     }
   }, [beneficiarioData.fechaNacimiento])
 
-  // Establecer fechas por defecto al llegar al paso de matrícula
+  // Agregar después de la línea donde se define showCreateForm
   useEffect(() => {
-    if (activeStep === 2 && !matriculaData.fechaInicio && !isEditing) {
+    if (showCreateForm) {
+      setActiveStep(0) // Reiniciar al primer paso cuando se activa el modo creación
+    }
+  }, [showCreateForm])
+
+  // Reemplazar el useEffect que establece las fechas por defecto:
+  // Establecer fechas por defecto cuando se llega al paso de matrícula
+  useEffect(() => {
+    // Establecer fechas automáticamente cuando:
+    // 1. Estamos en el paso de matrícula (activeStep === 0)
+    // 2. No hay fechas ya establecidas
+    // 3. No estamos en modo edición
+    if (activeStep === 0 && !matriculaData.fechaInicio && !isEditing) {
       const hoy = new Date()
       const fechaInicio = hoy.toISOString().split("T")[0]
       const fechaFin = new Date(hoy.setFullYear(hoy.getFullYear() + 1)).toISOString().split("T")[0]
@@ -701,41 +763,130 @@ export const VentaMatriculasForm = ({
         fechaInicio: fechaInicio,
         fechaFin: fechaFin,
       }))
-    }
-  }, [activeStep, isEditing])
 
-  // Manejar envío del formulario (ACTUALIZADO con nueva lógica)
+      // También establecer fecha de pago como hoy
+      setPagoData((prev) => ({
+        ...prev,
+        fechaPago: new Date().toISOString().split("T")[0],
+      }))
+    }
+  }, [activeStep, isEditing, matriculaData.fechaInicio])
+
+  // Manejar envío del formulario
   const handleSubmit = () => {
-    // Validar datos básicos
-    if (!clienteData.nombre || !beneficiarioData.nombre || !matriculaData.fechaInicio || !matriculaData.fechaFin) {
+    if (isFormSubmitting) {
+      console.log("Formulario ya está siendo enviado, ignorando...")
+      return
+    }
+    
+    const formSubmitId = Math.random().toString(36).substr(2, 9); // ID único para este submit del formulario
+    console.log(`=== INICIANDO VALIDACIÓN DEL FORMULARIO [${formSubmitId}] ===`)
+    console.log("Timestamp:", new Date().toISOString())
+    console.log("ClienteData:", clienteData)
+    console.log("BeneficiarioData:", beneficiarioData)
+    console.log("MatriculaData:", matriculaData)
+    console.log("PagoData:", pagoData)
+    console.log("ShowCreateForm:", showCreateForm)
+    console.log("IsEditing:", isEditing)
+    
+    setIsFormSubmitting(true)
+    console.log(`[${formSubmitId}] isFormSubmitting set to:`, true)
+
+    try {
+      // Validar datos básicos de matrícula
+    if (!matriculaData.fechaInicio || !matriculaData.fechaFin || !matriculaData.matriculaId) {
       setAlertMessage({
         show: true,
-        message: "Por favor complete todos los campos requeridos",
+        message: "Por favor complete todos los campos obligatorios de la matrícula (fechas y tipo de matrícula)",
         severity: "error",
       })
       return
     }
 
-    // Validar contraseñas y correo solo si no estamos editando
-    if (!isEditing) {
-      if (!beneficiarioData.correo) {
+    // Validar datos de pago
+    if (!pagoData.fechaPago || !pagoData.metodoPago) {
+      setAlertMessage({
+        show: true,
+        message: "Por favor complete todos los campos obligatorios del pago (fecha y método de pago)",
+        severity: "error",
+      })
+      return
+    }
+
+    // Si estamos en modo creación (showCreateForm = true)
+    if (showCreateForm) {
+      // Validar datos del cliente
+      if (!clienteData.nombre || !clienteData.apellido || !clienteData.tipoDocumento || !clienteData.numeroDocumento) {
         setAlertMessage({
           show: true,
-          message: "Por favor ingrese un correo electrónico",
+          message:
+            "Por favor complete todos los campos obligatorios del cliente (nombre, apellido, tipo y número de documento)",
           severity: "error",
         })
         return
       }
-      if (!beneficiarioData.password || beneficiarioData.password !== beneficiarioData.confirmPassword) {
+
+      // Validar datos del beneficiario
+      if (
+        !beneficiarioData.nombre ||
+        !beneficiarioData.apellido ||
+        !beneficiarioData.tipoDocumento ||
+        !beneficiarioData.numeroDocumento
+      ) {
         setAlertMessage({
           show: true,
-          message: "Por favor complete las contraseñas correctamente",
+          message:
+            "Por favor complete todos los campos obligatorios del beneficiario (nombre, apellido, tipo y número de documento)",
+          severity: "error",
+        })
+        return
+      }
+
+      // Validar correo y contraseña SOLO si no estamos editando
+      if (!isEditing) {
+        if (!beneficiarioData.correo || !beneficiarioData.correo.includes("@")) {
+          setAlertMessage({
+            show: true,
+            message: "Por favor ingrese un correo electrónico válido para el beneficiario",
+            severity: "error",
+          })
+          return
+        }
+
+        if (!beneficiarioData.password || beneficiarioData.password.length < 6) {
+          setAlertMessage({
+            show: true,
+            message: "Por favor ingrese una contraseña de al menos 6 caracteres",
+            severity: "error",
+          })
+          return
+        }
+
+        if (beneficiarioData.password !== beneficiarioData.confirmPassword) {
+          setAlertMessage({
+            show: true,
+            message: "Las contraseñas no coinciden",
+            severity: "error",
+          })
+          return
+        }
+      }
+    } else {
+      // Si NO estamos en modo creación, debe haber un beneficiario seleccionado
+      if (!selectedBeneficiario) {
+        setAlertMessage({
+          show: true,
+          message: "Por favor seleccione un beneficiario existente",
           severity: "error",
         })
         return
       }
     }
 
+    console.log(`[${formSubmitId}] === VALIDACIÓN EXITOSA - PROCEDIENDO CON EL ENVÍO ===`)
+    console.log(`[${formSubmitId}] Timestamp antes de llamar onSubmit:`, new Date().toISOString())
+
+    // Resto del código de handleSubmit permanece igual...
     // Usuario para beneficiario - usar campos correctos
     const usuarioBeneficiario = {
       nombre: beneficiarioData.nombre,
@@ -758,6 +909,8 @@ export const VentaMatriculasForm = ({
       fechaNacimiento: beneficiarioData.fechaNacimiento,
       correo: beneficiarioData.correo,
       estado: true,
+      // LÓGICA DEL clienteId según la regla original
+      clienteId: clienteEsBeneficiario ? null : "cliente", // Se actualizará después con el ID real
     }
 
     // Cliente (si es diferente del beneficiario)
@@ -773,13 +926,16 @@ export const VentaMatriculasForm = ({
           direccion: clienteData.direccion,
           fechaNacimiento: clienteData.fechaNacimiento,
           estado: true,
+          clienteId: "cliente", // AGREGAR ESTA LÍNEA
         }
 
     // Datos de matrícula
     const matricula = {
       id: matriculaData.id,
-      cliente: `${clienteData.nombre} ${clienteData.apellido}`,
-      beneficiario: `${beneficiarioData.nombre} ${beneficiarioData.apellido}`,
+      cliente: showCreateForm ? `${clienteData.nombre} ${clienteData.apellido}` : matriculaData.cliente,
+      beneficiario: showCreateForm
+        ? `${beneficiarioData.nombre} ${beneficiarioData.apellido}`
+        : matriculaData.beneficiario,
       fechaInicio: matriculaData.fechaInicio,
       fechaFin: matriculaData.fechaFin,
       matriculaId: matriculaData.matriculaId,
@@ -801,7 +957,23 @@ export const VentaMatriculasForm = ({
           }
         : null
 
-    // Envía todo al padre
+    // Datos del pago
+    const pago = {
+      fechaPago: pagoData.fechaPago,
+      metodoPago: pagoData.metodoPago,
+      valor_total: Number.parseFloat(pagoData.valor_total || matriculaData.valorFinal),
+      numeroTransaccion: pagoData.numeroTransaccion,
+    }
+
+    console.log("=== DATOS FINALES A ENVIAR ===")
+    console.log("Matricula:", matricula)
+    console.log("Beneficiario:", beneficiario)
+    console.log("Cliente:", cliente)
+    console.log("Pago:", pago)
+    console.log("==============================")
+
+    // Envía todo al padre (agregar pago al objeto)
+    console.log(`[${formSubmitId}] Llamando a onSubmit del padre...`)
     onSubmit({
       matricula,
       beneficiario,
@@ -809,96 +981,439 @@ export const VentaMatriculasForm = ({
       cliente,
       clienteEsBeneficiario,
       curso,
+      pago, // Agregar esta línea
       isEditing,
     })
+      console.log(`[${formSubmitId}] onSubmit del padre llamado exitosamente`)
+    } catch (error) {
+      console.error(`[${formSubmitId}] Error en validación del formulario:`, error)
+    } finally {
+      setIsFormSubmitting(false)
+      console.log(`[${formSubmitId}] isFormSubmitting reset to:`, false)
+    }
   }
 
-  // Renderizado del contenido del paso actual
   const renderStepContent = () => {
     const slideClass = transition === "slideLeft" ? "slide-left" : "slide-right"
 
-    switch (activeStep) {
-      case 0:
+    // Determinar qué paso estamos mostrando basado en si estamos creando o no
+    let currentStepType = ""
+    if (showCreateForm) {
+      switch (activeStep) {
+        case 0:
+          currentStepType = "matricula"
+          break
+        case 1:
+          currentStepType = "cliente"
+          break
+        case 2:
+          currentStepType = "beneficiario"
+          break
+        case 3:
+          currentStepType = "curso"
+          break
+      }
+    } else {
+      switch (activeStep) {
+        case 0:
+          currentStepType = "matricula"
+          break
+        case 1:
+          currentStepType = "curso"
+          break
+      }
+    }
+
+    switch (currentStepType) {
+      case "matricula":
         return (
           <Box className={slideClass} sx={{ animation: `${slideClass} 0.3s forwards` }}>
             <Typography variant="h6" sx={{ mb: 2, color: "#0455a2", fontWeight: 500 }}>
-              Datos del Cliente
+              Datos de la Matrícula
             </Typography>
 
-            {!isEditing && (
+            {/* Selector de beneficiario al inicio */}
+            {!isEditing && !showCreateForm && (
               <Paper elevation={0} sx={{ p: 2, mb: 3, border: "1px solid #e0e0e0", borderRadius: "8px" }}>
-                <Grid container spacing={2} alignItems="center">
-                  <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ mb: 2, color: "#0455a2", fontWeight: 500 }}>
+                  Seleccionar Beneficiario
+                </Typography>
+                <Autocomplete
+                  options={getBeneficiariosDisponibles()}
+                  getOptionLabel={(option) => `${option.nombre} ${option.apellido} - ${option.numero_de_documento}`}
+                  value={selectedBeneficiario}
+                  onChange={(event, newValue) => {
+                    handleBeneficiarioSelection(newValue)
+                    if (newValue) {
+                      // Determinar cliente después de la selección
+                      const clienteIdStr = String(newValue.clienteId || "")
+                      const beneficiarioIdStr = String(newValue._id)
+                      const esClienteBeneficiario = clienteIdStr === beneficiarioIdStr
+                      const clienteReal = beneficiarios.find((b) => String(b._id) === clienteIdStr)
+
+                      // Actualizar inmediatamente los datos de matrícula
+                      setTimeout(() => {
+                        setMatriculaData((prev) => ({
+                          ...prev,
+                          cliente: esClienteBeneficiario
+                            ? `${newValue.nombre} ${newValue.apellido}`
+                            : clienteReal
+                              ? `${clienteReal.nombre} ${clienteReal.apellido}`
+                              : `${newValue.nombre} ${newValue.apellido}`,
+                          beneficiario: `${newValue.nombre} ${newValue.apellido}`,
+                        }))
+                      }, 100)
+                    } else {
+                      setMatriculaData((prev) => ({
+                        ...prev,
+                        cliente: "",
+                        beneficiario: "",
+                      }))
+                    }
+                  }}
+                  renderInput={(params) => (
                     <TextField
-                      fullWidth
-                      label="Buscar cliente (nombre, apellido o documento)"
-                      variant="outlined"
-                      size="small"
-                      value={clienteSearchTerm}
-                      onChange={(e) => handleClienteSearch(e.target.value)}
+                      {...params}
+                      label="Buscar beneficiario"
+                      placeholder="Seleccione un beneficiario existente"
                       InputProps={{
+                        ...params.InputProps,
                         startAdornment: (
                           <InputAdornment position="start">
                             <SearchIcon />
                           </InputAdornment>
                         ),
-                        endAdornment: clienteLoading && (
-                          <InputAdornment position="end">
-                            <CircularProgress size={20} />
-                          </InputAdornment>
-                        ),
                       }}
-                      autoFocus
                     />
-                  </Grid>
-                </Grid>
+                  )}
+                  renderOption={(props, option) => (
+                    <Box component="li" {...props}>
+                      <Avatar sx={{ bgcolor: "#0455a2", mr: 2 }}>
+                        <SchoolIcon />
+                      </Avatar>
+                      <Box>
+                        <Typography variant="body1">
+                          {option.nombre} {option.apellido}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {option.tipo_de_documento}: {option.numero_de_documento}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  )}
+                  noOptionsText="No hay beneficiarios disponibles"
+                  sx={{ mb: 2 }}
+                />
+                <Box sx={{ display: "flex", justifyContent: "center" }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<PersonAddIcon />}
+                    onClick={() => {
+                      // Limpiar beneficiario seleccionado y sus datos SIN TRIGGEAR useEffects
+                      setSelectedBeneficiario(null)
 
-                {showClienteResults && filteredClientes.length > 0 && (
-                  <Paper
-                    elevation={3}
+                      // Resetear datos sin triggear los useEffects de edad
+                      const emptyBeneficiarioData = {
+                        id: null,
+                        nombre: "",
+                        apellido: "",
+                        tipoDocumento: "",
+                        numeroDocumento: "",
+                        fechaNacimiento: "",
+                        age: "",
+                        direccion: "",
+                        telefono: "",
+                        correo: "",
+                        estado: true,
+                        password: "",
+                        confirmPassword: "",
+                      }
+
+                      const emptyClienteData = {
+                        id: null,
+                        nombre: "",
+                        apellido: "",
+                        tipoDocumento: "",
+                        numeroDocumento: "",
+                        fechaNacimiento: "",
+                        age: "",
+                        direccion: "",
+                        telefono: "",
+                        estado: true,
+                      }
+
+                      // Establecer datos vacíos
+                      setBeneficiarioData(emptyBeneficiarioData)
+                      setClienteData(emptyClienteData)
+                      setClienteEsBeneficiario(false)
+
+                      // Activar modo creación
+                      setShowCreateForm(true)
+
+                      // Establecer fechas automáticamente
+                      const hoy = new Date()
+                      const fechaInicio = hoy.toISOString().split("T")[0]
+                      const fechaFin = new Date(hoy.setFullYear(hoy.getFullYear() + 1)).toISOString().split("T")[0]
+
+                      setMatriculaData((prev) => ({
+                        ...prev,
+                        fechaInicio: fechaInicio,
+                        fechaFin: fechaFin,
+                        cliente: "Por crear",
+                        beneficiario: "Por crear",
+                      }))
+
+                      // También establecer fecha de pago como hoy
+                      setPagoData((prev) => ({
+                        ...prev,
+                        fechaPago: new Date().toISOString().split("T")[0],
+                      }))
+                    }}
                     sx={{
-                      mt: 1,
-                      maxHeight: "200px",
-                      overflow: "auto",
-                      border: "1px solid #e0e0e0",
-                      borderRadius: "4px",
+                      textTransform: "none",
+                      borderColor: "#0455a2",
+                      color: "#0455a2",
+                      "&:hover": {
+                        borderColor: "#033b70",
+                        bgcolor: "rgba(4, 85, 162, 0.04)",
+                      },
                     }}
                   >
-                    <List dense>
-                      {filteredClientes.map((cliente) => (
-                        <ListItem
-                          key={cliente._id || cliente.id}
-                          button
-                          onClick={() => handleSelectCliente(cliente)}
-                          sx={{
-                            "&:hover": {
-                              bgcolor: "rgba(4, 85, 162, 0.08)",
-                            },
-                          }}
-                        >
-                          <ListItemAvatar>
-                            <Avatar sx={{ bgcolor: "#0455a2" }}>
-                              <PersonIcon />
-                            </Avatar>
-                          </ListItemAvatar>
-                          <ListItemText
-                            primary={`${cliente.nombre} ${cliente.apellido}`}
-                            secondary={`${cliente.tipo_de_documento}: ${cliente.numero_de_documento}`}
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
-                  </Paper>
-                )}
-                {showClienteResults && filteredClientes.length === 0 && clienteSearchTerm.trim() !== "" && (
-                  <Paper elevation={1} sx={{ mt: 1, p: 2, bgcolor: "#fff3cd", border: "1px solid #ffeaa7" }}>
-                    <Typography variant="body2" color="text.secondary">
-                      No se encontraron clientes disponibles. Los clientes con matrículas activas no se muestran.
-                    </Typography>
-                  </Paper>
+                    Crear nuevo cliente y beneficiario
+                  </Button>
+                </Box>
+                {showCreateForm && (
+                  <Alert severity="info" sx={{ mt: 2 }}>
+                    Se habilitarán los formularios para crear cliente y beneficiario.
+                  </Alert>
                 )}
               </Paper>
             )}
+
+            {/* Resto del formulario de matrícula */}
+            <Paper elevation={0} sx={{ p: 2, mb: 3, border: "1px solid #e0e0e0", borderRadius: "8px" }}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" sx={{ color: "#0455a2" }}>
+                    Cliente
+                  </Typography>
+                  <Typography>{showCreateForm ? "Por crear" : matriculaData.cliente || "Por seleccionar"}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" sx={{ color: "#0455a2" }}>
+                    Beneficiario
+                  </Typography>
+                  <Typography>
+                    {showCreateForm ? "Por crear" : matriculaData.beneficiario || "Por seleccionar"}
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Paper>
+
+            {/* Campos de matrícula */}
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  required
+                  label="Fecha de Inicio"
+                  type="date"
+                  value={matriculaData.fechaInicio}
+                  onChange={(e) => setMatriculaData({ ...matriculaData, fechaInicio: e.target.value })}
+                  margin="normal"
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  required
+                  label="Fecha de Fin"
+                  type="date"
+                  value={matriculaData.fechaFin}
+                  onChange={(e) => setMatriculaData({ ...matriculaData, fechaFin: e.target.value })}
+                  margin="normal"
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <Divider sx={{ my: 2 }}>Selección de Matrícula</Divider>
+              </Grid>
+
+              <Grid item xs={12}>
+                <FormControl fullWidth margin="normal" required>
+                  <InputLabel>Tipo de Matrícula</InputLabel>
+                  <Select
+                    value={matriculaData.matriculaId || ""}
+                    onChange={(e) => {
+                      const matriculaSeleccionada = matriculas.find((m) => m._id === e.target.value)
+                      if (matriculaSeleccionada) {
+                        const valorBase = matriculaSeleccionada.valorMatricula
+                        const descuento = Number.parseFloat(matriculaData.descuento || 0)
+                        const valorFinal = valorBase - descuento
+
+                        setMatriculaData({
+                          ...matriculaData,
+                          matriculaId: e.target.value,
+                          valor: valorBase.toString(),
+                          valorFinal: valorFinal >= 0 ? valorFinal.toString() : "0",
+                        })
+                      }
+                    }}
+                    label="Tipo de Matrícula"
+                  >
+                    {matriculas
+                      .filter((m) => m.estado)
+                      .map((matricula) => (
+                        <MenuItem key={matricula._id} value={matricula._id}>
+                          {matricula.nombre} - ${matricula.valorMatricula?.toLocaleString() || 0}
+                        </MenuItem>
+                      ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Observaciones"
+                  value={matriculaData.observaciones}
+                  onChange={(e) => setMatriculaData({ ...matriculaData, observaciones: e.target.value })}
+                  margin="normal"
+                  multiline
+                  minRows={2}
+                />
+              </Grid>
+
+              {/* Sección consolidada de Información de Pago */}
+              <Grid item xs={12}>
+                <Divider sx={{ my: 2 }}>Información de Pago</Divider>
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Valor Base de la Matrícula"
+                  type="number"
+                  value={matriculaData.valor}
+                  margin="normal"
+                  InputProps={{
+                    readOnly: true,
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <AttachMoneyIcon />
+                      </InputAdornment>
+                    ),
+                  }}
+                  disabled
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Monto de Descuento"
+                  type="number"
+                  value={matriculaData.descuento}
+                  onChange={(e) => {
+                    const descuento = Number.parseFloat(e.target.value || 0)
+                    const valorBase = Number.parseFloat(matriculaData.valor || 0)
+                    const valorFinal = valorBase - descuento
+
+                    setMatriculaData({
+                      ...matriculaData,
+                      descuento: e.target.value,
+                      valorFinal: valorFinal >= 0 ? valorFinal.toString() : "0",
+                    })
+                  }}
+                  margin="normal"
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <AttachMoneyIcon />
+                      </InputAdornment>
+                    ),
+                    inputProps: { min: 0, max: matriculaData.valor },
+                  }}
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Total a Pagar"
+                  type="number"
+                  value={matriculaData.valorFinal}
+                  margin="normal"
+                  InputProps={{
+                    readOnly: true,
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <AttachMoneyIcon />
+                      </InputAdornment>
+                    ),
+                  }}
+                  sx={{
+                    "& .MuiInputBase-input": {
+                      fontWeight: 600,
+                      fontSize: "1.1rem",
+                    },
+                  }}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  required
+                  label="Fecha de Pago"
+                  type="date"
+                  value={pagoData.fechaPago}
+                  onChange={(e) => setPagoData({ ...pagoData, fechaPago: e.target.value })}
+                  margin="normal"
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth margin="normal" required>
+                  <InputLabel>Método de Pago</InputLabel>
+                  <Select
+                    value={pagoData.metodoPago}
+                    onChange={(e) => setPagoData({ ...pagoData, metodoPago: e.target.value })}
+                    label="Método de Pago"
+                  >
+                    <MenuItem value="Tarjeta">Tarjeta</MenuItem>
+                    <MenuItem value="Transferencia">Transferencia</MenuItem>
+                    <MenuItem value="Efectivo">Efectivo</MenuItem>
+                    <MenuItem value="PSE">PSE</MenuItem>
+                    <MenuItem value="Nequi">Nequi</MenuItem>
+                    <MenuItem value="Daviplata">Daviplata</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Número de Transacción"
+                  value={pagoData.numeroTransaccion}
+                  onChange={(e) => setPagoData({ ...pagoData, numeroTransaccion: e.target.value })}
+                  margin="normal"
+                  placeholder="Número de transacción (opcional)"
+                />
+              </Grid>
+            </Grid>
+          </Box>
+        )
+
+      case "cliente":
+        return (
+          <Box className={slideClass} sx={{ animation: `${slideClass} 0.3s forwards` }}>
+            <Typography variant="h6" sx={{ mb: 2, color: "#0455a2", fontWeight: 500 }}>
+              Datos del Cliente
+            </Typography>
 
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
@@ -985,94 +1500,60 @@ export const VentaMatriculasForm = ({
                   margin="normal"
                 />
               </Grid>
+              {/* Checkbox para cliente es beneficiario - MOVER AQUÍ */}
+              {!isEditing && (
+                <Grid item xs={12} sx={{ mt: 2 }}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={clienteEsBeneficiario}
+                        onChange={(e) => {
+                          const isChecked = e.target.checked
+                          setClienteEsBeneficiario(isChecked)
+
+                          if (isChecked) {
+                            // Copiar datos del cliente al beneficiario
+                            setBeneficiarioData((prev) => ({
+                              ...clienteData,
+                              id: null,
+                              tipoDocumento: clienteData.tipoDocumento || "TI",
+                              correo: prev.correo || "",
+                              password: prev.password || "",
+                              confirmPassword: prev.confirmPassword || "",
+                            }))
+                            // Avanzar automáticamente al siguiente paso
+                            handleNext()
+                          }
+                          // NO limpiar datos del beneficiario cuando se desmarca
+                        }}
+                        sx={{
+                          color: "#0455a2",
+                          "&.Mui-checked": {
+                            color: "#0455a2",
+                          },
+                        }}
+                      />
+                    }
+                    label="Cliente es beneficiario"
+                    sx={{
+                      "& .MuiFormControlLabel-label": {
+                        fontWeight: 500,
+                        color: "#0455a2",
+                      },
+                    }}
+                  />
+                </Grid>
+              )}
             </Grid>
           </Box>
         )
 
-      case 1:
+      case "beneficiario":
         return (
           <Box className={slideClass} sx={{ animation: `${slideClass} 0.3s forwards` }}>
             <Typography variant="h6" sx={{ mb: 2, color: "#0455a2", fontWeight: 500 }}>
               Datos del Beneficiario
             </Typography>
-
-            {!clienteEsBeneficiario && !isEditing && (
-              <Paper elevation={0} sx={{ p: 2, mb: 3, border: "1px solid #e0e0e0", borderRadius: "8px" }}>
-                <Grid container spacing={2} alignItems="center">
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="Buscar beneficiario (nombre, apellido o documento)"
-                      variant="outlined"
-                      size="small"
-                      value={beneficiarioSearchTerm}
-                      onChange={(e) => handleBeneficiarioSearch(e.target.value)}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <SearchIcon />
-                          </InputAdornment>
-                        ),
-                        endAdornment: beneficiarioLoading && (
-                          <InputAdornment position="end">
-                            <CircularProgress size={20} />
-                          </InputAdornment>
-                        ),
-                      }}
-                      autoFocus
-                    />
-                  </Grid>
-                </Grid>
-
-                {showBeneficiarioResults && filteredBeneficiarios.length > 0 && (
-                  <Paper
-                    elevation={3}
-                    sx={{
-                      mt: 1,
-                      maxHeight: "200px",
-                      overflow: "auto",
-                      border: "1px solid #e0e0e0",
-                      borderRadius: "4px",
-                    }}
-                  >
-                    <List dense>
-                      {filteredBeneficiarios.map((beneficiario) => (
-                        <ListItem
-                          key={beneficiario._id || beneficiario.id}
-                          button
-                          onClick={() => handleSelectBeneficiario(beneficiario)}
-                          sx={{
-                            "&:hover": {
-                              bgcolor: "rgba(4, 85, 162, 0.08)",
-                            },
-                          }}
-                        >
-                          <ListItemAvatar>
-                            <Avatar sx={{ bgcolor: "#0455a2" }}>
-                              <SchoolIcon />
-                            </Avatar>
-                          </ListItemAvatar>
-                          <ListItemText
-                            primary={`${beneficiario.nombre} ${beneficiario.apellido}`}
-                            secondary={`${beneficiario.tipo_de_documento}: ${beneficiario.numero_de_documento}`}
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
-                  </Paper>
-                )}
-                {showBeneficiarioResults &&
-                  filteredBeneficiarios.length === 0 &&
-                  beneficiarioSearchTerm.trim() !== "" && (
-                    <Paper elevation={1} sx={{ mt: 1, p: 2, bgcolor: "#fff3cd", border: "1px solid #ffeaa7" }}>
-                      <Typography variant="body2" color="text.secondary">
-                        No se encontraron beneficiarios disponibles. Los beneficiarios con matrículas activas no se
-                        muestran.
-                      </Typography>
-                    </Paper>
-                  )}
-              </Paper>
-            )}
 
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
@@ -1211,184 +1692,7 @@ export const VentaMatriculasForm = ({
           </Box>
         )
 
-      case 2:
-        return (
-          <Box className={slideClass} sx={{ animation: `${slideClass} 0.3s forwards` }}>
-            <Typography variant="h6" sx={{ mb: 2, color: "#0455a2", fontWeight: 500 }}>
-              Datos de la Matrícula
-            </Typography>
-            <Paper elevation={0} sx={{ p: 2, mb: 3, border: "1px solid #e0e0e0", borderRadius: "8px" }}>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" sx={{ color: "#0455a2" }}>
-                    Cliente
-                  </Typography>
-                  <Typography>{matriculaData.cliente}</Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" sx={{ color: "#0455a2" }}>
-                    Beneficiario
-                  </Typography>
-                  <Typography>{matriculaData.beneficiario}</Typography>
-                </Grid>
-              </Grid>
-            </Paper>
-
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  required
-                  label="Fecha de Inicio"
-                  type="date"
-                  value={matriculaData.fechaInicio}
-                  onChange={(e) => setMatriculaData({ ...matriculaData, fechaInicio: e.target.value })}
-                  margin="normal"
-                  InputLabelProps={{ shrink: true }}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  required
-                  label="Fecha de Fin"
-                  type="date"
-                  value={matriculaData.fechaFin}
-                  onChange={(e) => setMatriculaData({ ...matriculaData, fechaFin: e.target.value })}
-                  margin="normal"
-                  InputLabelProps={{ shrink: true }}
-                />
-              </Grid>
-
-              <Grid item xs={12}>
-                <Divider sx={{ my: 2 }}>Selección de Matrícula</Divider>
-              </Grid>
-
-              <Grid item xs={12}>
-                <FormControl fullWidth margin="normal" required>
-                  <InputLabel>Tipo de Matrícula</InputLabel>
-                  <Select
-                    value={matriculaData.matriculaId || ""}
-                    onChange={(e) => {
-                      const matriculaSeleccionada = matriculas.find((m) => m._id === e.target.value)
-                      if (matriculaSeleccionada) {
-                        const valorBase = matriculaSeleccionada.valorMatricula
-                        const descuento = Number.parseFloat(matriculaData.descuento || 0)
-                        const valorFinal = valorBase - descuento
-
-                        setMatriculaData({
-                          ...matriculaData,
-                          matriculaId: e.target.value,
-                          valor: valorBase.toString(),
-                          valorFinal: valorFinal >= 0 ? valorFinal.toString() : "0",
-                        })
-                      }
-                    }}
-                    label="Tipo de Matrícula"
-                  >
-                    {matriculas
-                      .filter((m) => m.estado)
-                      .map((matricula) => (
-                        <MenuItem key={matricula._id} value={matricula._id}>
-                          {matricula.nombre} - ${matricula.valorMatricula?.toLocaleString() || 0}
-                        </MenuItem>
-                      ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12}>
-                <Divider sx={{ my: 2 }}>Información de Pago</Divider>
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Valor Base de la Matrícula"
-                  type="number"
-                  value={matriculaData.valor}
-                  margin="normal"
-                  InputProps={{
-                    readOnly: true,
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <AttachMoneyIcon />
-                      </InputAdornment>
-                    ),
-                  }}
-                  disabled
-                />
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Monto de Descuento"
-                  type="number"
-                  value={matriculaData.descuento}
-                  onChange={(e) => {
-                    const descuento = Number.parseFloat(e.target.value || 0)
-                    const valorBase = Number.parseFloat(matriculaData.valor || 0)
-                    const valorFinal = valorBase - descuento
-
-                    setMatriculaData({
-                      ...matriculaData,
-                      descuento: e.target.value,
-                      valorFinal: valorFinal >= 0 ? valorFinal.toString() : "0",
-                    })
-                  }}
-                  margin="normal"
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <AttachMoneyIcon />
-                      </InputAdornment>
-                    ),
-                    inputProps: { min: 0, max: matriculaData.valor },
-                  }}
-                />
-              </Grid>
-
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Total a Pagar"
-                  type="number"
-                  value={matriculaData.valorFinal}
-                  margin="normal"
-                  InputProps={{
-                    readOnly: true,
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <AttachMoneyIcon />
-                      </InputAdornment>
-                    ),
-                  }}
-                  sx={{
-                    "& .MuiInputBase-input": {
-                      fontWeight: 600,
-                      fontSize: "1.1rem",
-                    },
-                  }}
-                />
-              </Grid>
-
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Observaciones"
-                  value={matriculaData.observaciones}
-                  onChange={(e) => setMatriculaData({ ...matriculaData, observaciones: e.target.value })}
-                  margin="normal"
-                  multiline
-                  minRows={2}
-                />
-              </Grid>
-            </Grid>
-          </Box>
-        )
-
-      case 3:
+      case "curso":
         // Solo mostrar si no estamos editando
         if (isEditing) return null
 
@@ -1528,44 +1832,59 @@ export const VentaMatriculasForm = ({
         <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 4 }}>
           <Step>
             <StepLabel
-              icon={<PersonIcon color={activeStep >= 0 ? "primary" : "disabled"} />}
+              icon={<EventNoteIcon color={activeStep >= 0 ? "primary" : "disabled"} />}
               StepIconProps={{
                 completed: activeStep > 0,
                 active: activeStep === 0,
               }}
             >
-              Cliente
-            </StepLabel>
-          </Step>
-          <Step>
-            <StepLabel
-              icon={<SchoolIcon color={activeStep >= 1 ? "primary" : "disabled"} />}
-              StepIconProps={{
-                completed: activeStep > 1,
-                active: activeStep === 1,
-              }}
-            >
-              Beneficiario
-            </StepLabel>
-          </Step>
-          <Step>
-            <StepLabel
-              icon={<EventNoteIcon color={activeStep >= 2 ? "primary" : "disabled"} />}
-              StepIconProps={{
-                completed: activeStep > 2,
-                active: activeStep === 2,
-              }}
-            >
               Matrícula
             </StepLabel>
           </Step>
-          {!isEditing && (
+          {showCreateForm && (
+            <>
+              <Step>
+                <StepLabel
+                  icon={<PersonIcon color={activeStep >= 1 ? "primary" : "disabled"} />}
+                  StepIconProps={{
+                    completed: activeStep > 1,
+                    active: activeStep === 1,
+                  }}
+                >
+                  Cliente
+                </StepLabel>
+              </Step>
+              <Step>
+                <StepLabel
+                  icon={<SchoolIcon color={activeStep >= 2 ? "primary" : "disabled"} />}
+                  StepIconProps={{
+                    completed: activeStep > 2,
+                    active: activeStep === 2,
+                  }}
+                >
+                  Beneficiario
+                </StepLabel>
+              </Step>
+              <Step>
+                <StepLabel
+                  icon={<EventNoteIcon color={activeStep >= 3 ? "primary" : "disabled"} />}
+                  StepIconProps={{
+                    completed: activeStep > 3,
+                    active: activeStep === 3,
+                  }}
+                >
+                  Curso
+                </StepLabel>
+              </Step>
+            </>
+          )}
+          {!showCreateForm && !isEditing && (
             <Step>
               <StepLabel
-                icon={<EventNoteIcon color={activeStep >= 3 ? "primary" : "disabled"} />}
+                icon={<EventNoteIcon color={activeStep >= 1 ? "primary" : "disabled"} />}
                 StepIconProps={{
-                  completed: activeStep > 3,
-                  active: activeStep === 3,
+                  completed: activeStep > 1,
+                  active: activeStep === 1,
                 }}
               >
                 Curso
@@ -1597,42 +1916,6 @@ export const VentaMatriculasForm = ({
           alignItems: "center",
         }}
       >
-        {activeStep === 0 && !isEditing && (
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={clienteEsBeneficiario}
-                onChange={(e) => {
-                  setClienteEsBeneficiario(e.target.checked)
-                  if (e.target.checked) {
-                    setBeneficiarioData({
-                      ...clienteData,
-                      id: null,
-                      tipoDocumento: "TI",
-                      correo: "",
-                      password: "",
-                      confirmPassword: "",
-                    })
-                    handleNext()
-                  }
-                }}
-                sx={{
-                  color: "#0455a2",
-                  "&.Mui-checked": {
-                    color: "#0455a2",
-                  },
-                }}
-              />
-            }
-            label="Cliente es beneficiario"
-            sx={{
-              "& .MuiFormControlLabel-label": {
-                fontWeight: 500,
-                color: "#0455a2",
-              },
-            }}
-          />
-        )}
         <Box sx={{ display: "flex", gap: 2, ml: "auto" }}>
           <Button
             onClick={onClose}

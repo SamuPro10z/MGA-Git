@@ -511,6 +511,20 @@ exports.deleteUsuario = async (req, res) => {
     // También eliminar las relaciones usuario-rol
     await UsuarioHasRol.deleteMany({ usuarioId: req.params.id });
     
+    // Si el usuario tenía rol de cliente, eliminar también el registro de cliente
+    if (rolesNombres.includes('cliente')) {
+      const Cliente = require('../models/Cliente');
+      // Buscar cliente por número de documento y nombre/apellido
+      if (usuario.documento) {
+        const clientesEliminados = await Cliente.deleteMany({
+          numeroDocumento: usuario.documento,
+          nombre: usuario.nombre,
+          apellido: usuario.apellido
+        });
+        console.log(`Clientes eliminados: ${clientesEliminados.deletedCount}`);
+      }
+    }
+    
     res.json({ 
       message: 'Usuario eliminado exitosamente',
       deletedUser: {

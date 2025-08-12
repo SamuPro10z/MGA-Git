@@ -5,25 +5,14 @@ import axios from "axios"
 import { GenericList } from "../../../shared/components/GenericList"
 import { DetailModal } from "../../../shared/components/DetailModal"
 import { VentaMatriculasForm } from "../components/VentaMatriculasForm"
-import {
-  Box,
-  Chip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  TextField,
-  Typography,
-} from "@mui/material"
+import { Box, Chip, TextField } from "@mui/material"
 import { ConfirmationDialog } from "../../../shared/components/ConfirmationDialog"
-import { createBeneficiarioUser } from "../../../shared/services/beneficiarioService"
 import { useAlertVentas } from "../context/AlertVentasContext"
 
 const API_BASE_URL = "http://localhost:3000/api"
 
 const VentaMatriculas = () => {
-  const { showSuccess, showError } = useAlertVentas();
+  const { showSuccess, showError } = useAlertVentas()
   const [ventas, setVentas] = useState([])
   const [ventasOriginales, setVentasOriginales] = useState([])
   const [clientes, setClientes] = useState([])
@@ -46,7 +35,7 @@ const VentaMatriculas = () => {
   // Cargar datos iniciales
   useEffect(() => {
     const loadData = async () => {
-      await fetchBeneficiarios() // Esto ahora carga beneficiarios Y matrículas
+      await fetchBeneficiarios()
       await fetchMatriculasData()
       await fetchCursos()
     }
@@ -65,7 +54,6 @@ const VentaMatriculas = () => {
       const beneficiariosData = response.data
       setBeneficiarios(beneficiariosData)
 
-      // Clientes: los que tienen "cliente" en clienteId o clienteId === _id
       const clientesFiltrados = beneficiariosData.filter(
         (b) =>
           (typeof b.clienteId === "string" && b.clienteId.toLowerCase().includes("cliente")) ||
@@ -73,7 +61,6 @@ const VentaMatriculas = () => {
       )
       setClientes(clientesFiltrados)
 
-      // Cargar matrículas después de tener los beneficiarios
       await fetchMatriculas(beneficiariosData)
     } catch (error) {
       console.error("Error al cargar los beneficiarios:", error)
@@ -90,57 +77,36 @@ const VentaMatriculas = () => {
     }
   }
 
-  // Traer solo ventas tipo matricula (actualizada para usar beneficiarios)
+  // Traer solo ventas tipo matricula
   const fetchMatriculas = async (beneficiariosData = null) => {
     try {
       setLoading(true)
       const response = await axios.get(`${API_BASE_URL}/ventas`)
 
-      // Solo matriculas con populate
       const soloMatriculas = response.data.filter((v) => v.tipo === "matricula")
 
-      console.log("Matrículas filtradas:", soloMatriculas.length)
-
-      // Usar los beneficiarios pasados como parámetro o los del estado
       const beneficiariosParaUsar = beneficiariosData || beneficiarios
-      console.log("Beneficiarios disponibles:", beneficiariosParaUsar.length)
 
-      // Formatear datos para la tabla usando la función de formato
       const matriculasFormateadas = soloMatriculas.map((venta) => {
-        // Obtener beneficiario (ya viene populado)
         const beneficiario = venta.beneficiarioId
 
-        // Determinar cliente y beneficiario
         let clienteNombre = "No especificado"
         let beneficiarioNombre = "No especificado"
 
         if (beneficiario) {
           beneficiarioNombre = `${beneficiario.nombre || ""} ${beneficiario.apellido || ""}`.trim()
 
-          // Lógica para determinar el cliente
           const clienteId = beneficiario.clienteId
           const beneficiarioId = beneficiario._id
 
-          console.log(`Procesando venta ${venta.codigoVenta}:`, {
-            beneficiarioId,
-            clienteId,
-            beneficiarioNombre,
-          })
-
           if (String(clienteId) === String(beneficiarioId)) {
-            // El beneficiario es su propio cliente
             clienteNombre = beneficiarioNombre
-            console.log(`${venta.codigoVenta}: Beneficiario es su propio cliente`)
           } else {
-            // Buscar el cliente real en la lista de beneficiarios usando el clienteId
             const clienteObj = beneficiariosParaUsar.find((b) => String(b._id) === String(clienteId))
             if (clienteObj) {
               clienteNombre = `${clienteObj.nombre || ""} ${clienteObj.apellido || ""}`.trim()
-              console.log(`${venta.codigoVenta}: Cliente encontrado:`, clienteNombre)
             } else {
-              // Si no se encuentra el cliente, mostrar el ID
               clienteNombre = `Cliente ID: ${clienteId}`
-              console.log(`${venta.codigoVenta}: Cliente no encontrado con ID:`, clienteId)
             }
           }
         }
@@ -161,8 +127,6 @@ const VentaMatriculas = () => {
         }
       })
 
-      console.log("Matrículas formateadas:", matriculasFormateadas)
-
       setVentasOriginales(matriculasFormateadas)
       setVentas(matriculasFormateadas)
     } catch (error) {
@@ -182,7 +146,7 @@ const VentaMatriculas = () => {
     }
   }
 
-  // Columnas para la tabla (igual que VentaCursos)
+  // Columnas para la tabla
   const columns = [
     { id: "codigoVenta", label: "Código Venta" },
     { id: "beneficiario", label: "Beneficiario" },
@@ -249,29 +213,18 @@ const VentaMatriculas = () => {
 
   const handleEdit = async (venta) => {
     try {
-      console.log("=== INICIANDO EDICIÓN ===")
-      console.log("Venta recibida:", venta)
-
-      // Buscar la venta original que corresponde al registro formateado
       const ventaOriginal = ventasOriginales.find((v) => v.id === venta.id)
-      console.log("Venta original encontrada:", ventaOriginal)
 
       if (!ventaOriginal) {
         console.error("No se encontró la venta original")
         return
       }
 
-      // Obtener los datos sin populate para edición
-      console.log("Obteniendo datos de la API para ID:", ventaOriginal._original._id)
       const response = await axios.get(`${API_BASE_URL}/ventas/${ventaOriginal._original._id}`)
       const ventaData = response.data
-      console.log("Datos de venta desde API:", ventaData)
 
-      // Buscar beneficiario completo usando el beneficiarioId de la venta
       const beneficiarioCompleto = beneficiarios.find((b) => String(b._id) === String(ventaData.beneficiarioId))
-      console.log("Beneficiario completo encontrado:", beneficiarioCompleto)
 
-      // Si no se encuentra en beneficiarios, intentar con la data populada original
       const beneficiarioFallback =
         ventaOriginal.beneficiarioObj ||
         (ventaData.beneficiarioId
@@ -283,25 +236,19 @@ const VentaMatriculas = () => {
           : null)
 
       const beneficiarioParaEditar = beneficiarioCompleto || beneficiarioFallback
-      console.log("Beneficiario para editar:", beneficiarioParaEditar)
 
       const matriculaAsociada = matriculas.find((m) => String(m._id) === String(ventaData.matriculaId))
-      console.log("Matrícula asociada encontrada:", matriculaAsociada)
 
       const ventaParaEditar = {
         ...ventaOriginal,
         _original: ventaData,
         beneficiarioObj: beneficiarioParaEditar,
         matriculaObj: matriculaAsociada,
-        // Convertir fechas al formato correcto
         fechaInicio: ventaData.fechaInicio,
         fechaFin: ventaData.fechaFin,
         valorTotal: ventaData.valor_total,
         descuento: ventaData.descuento || 0,
       }
-
-      console.log("=== DATOS FINALES PARA EDITAR ===")
-      console.log("ventaParaEditar:", ventaParaEditar)
 
       setIsEditing(true)
       setSelectedVenta(ventaParaEditar)
@@ -313,7 +260,6 @@ const VentaMatriculas = () => {
   }
 
   const handleDelete = (venta) => {
-    // Buscar la venta original
     const ventaOriginal = ventasOriginales.find((v) => v.id === venta.id)
     setVentaToDelete(ventaOriginal)
     setDeleteModalOpen(true)
@@ -335,7 +281,6 @@ const VentaMatriculas = () => {
   }
 
   const handleView = (venta) => {
-    // Buscar la venta original que corresponde al registro formateado
     const ventaOriginal = ventasOriginales.find((v) => v.id === venta.id)
     setSelectedVenta(ventaOriginal)
     setDetailModalOpen(true)
@@ -352,27 +297,25 @@ const VentaMatriculas = () => {
     setIsEditing(false)
   }
 
-  // NUEVA LÓGICA COMPLETA PARA handleSubmit
+  // ✅ FUNCIÓN PRINCIPAL - AHORA USA EL MIDDLEWARE PARA PAGOS
   const handleSubmit = async (formData) => {
     try {
-      const { matricula, beneficiario, usuarioBeneficiario, cliente, clienteEsBeneficiario, curso, isEditing } =
+      const { matricula, beneficiario, usuarioBeneficiario, cliente, clienteEsBeneficiario, curso, pago, isEditing } =
         formData
-      
-      console.log("=== DATOS DEL FORMULARIO ===");
-      console.log("Matricula del form:", JSON.stringify(matricula, null, 2));
-      console.log("============================");
-      let usuarioId = null
+
+      console.log("=== INICIANDO PROCESO DE VENTA ===")
+      console.log("Matricula:", JSON.stringify(matricula, null, 2))
+      console.log("Pago:", JSON.stringify(pago, null, 2))
+      console.log("Curso:", JSON.stringify(curso, null, 2))
+      console.log("=====================================")
+
       let beneficiarioId = null
       let clienteId = null
 
-      console.log("Iniciando proceso de creación/edición:", { isEditing, clienteEsBeneficiario })
-
-      // 1. Si estamos editando, usar IDs existentes y actualizar
+      // 1. Manejo de beneficiarios y clientes (código existente...)
       if (isEditing && selectedVenta?.beneficiarioObj?._id) {
         beneficiarioId = selectedVenta.beneficiarioObj._id
-        console.log("Modo edición - usando beneficiario existente:", beneficiarioId)
 
-        // Actualizar beneficiario existente
         await axios.put(`${API_BASE_URL}/beneficiarios/${beneficiarioId}`, {
           nombre: beneficiario.nombre,
           apellido: beneficiario.apellido,
@@ -384,11 +327,8 @@ const VentaMatriculas = () => {
           correo: beneficiario.correo,
           estado: beneficiario.estado,
         })
-        console.log("Beneficiario actualizado")
       } else {
-        // 2. MODO CREACIÓN - Buscar si ya existen o crear nuevos
-
-        // 2.1 Buscar cliente existente sin matrícula activa
+        // Lógica de creación de clientes y beneficiarios (código existente...)
         let clienteExistente = null
         if (!clienteEsBeneficiario) {
           clienteExistente = clientes.find(
@@ -406,17 +346,8 @@ const VentaMatriculas = () => {
           )
 
           if (clienteExistente) {
-            console.log("Cliente existente encontrado:", clienteExistente._id)
             clienteId = clienteExistente._id
           } else {
-            // Crear nuevo cliente
-            console.log("Creando nuevo cliente")
-            console.log("Creando nuevo cliente con datos:", {
-              nombre: cliente.nombre,
-              apellido: cliente.apellido,
-              numero_de_documento: cliente.numeroDocumento,
-              clienteId: "cliente"
-            });
             const clienteResponse = await axios.post(`${API_BASE_URL}/beneficiarios`, {
               nombre: cliente.nombre,
               apellido: cliente.apellido,
@@ -426,14 +357,12 @@ const VentaMatriculas = () => {
               direccion: cliente.direccion,
               fechaDeNacimiento: cliente.fechaNacimiento,
               estado: cliente.estado,
-              clienteId: "cliente", // Marcador para identificar como cliente
+              clienteId: "cliente",
             })
             clienteId = clienteResponse.data._id
-            console.log("Cliente creado exitosamente con ID:", clienteId)
           }
         }
 
-        // 2.2 Buscar beneficiario existente sin matrícula activa
         const beneficiarioExistente = beneficiarios.find(
           (b) =>
             b.numero_de_documento === beneficiario.numeroDocumento &&
@@ -447,31 +376,25 @@ const VentaMatriculas = () => {
         )
 
         if (beneficiarioExistente) {
-          console.log("Beneficiario existente encontrado:", beneficiarioExistente._id)
           beneficiarioId = beneficiarioExistente._id
 
-          // Si el cliente quiere ser su propio beneficiario, actualizar clienteId
           if (clienteEsBeneficiario) {
             await axios.put(`${API_BASE_URL}/beneficiarios/${beneficiarioId}`, {
               ...beneficiarioExistente,
-              clienteId: beneficiarioId, // El beneficiario es su propio cliente
+              clienteId: beneficiarioId,
             })
-            console.log("Beneficiario configurado como su propio cliente")
           } else if (clienteId) {
-            // Actualizar con el clienteId correcto
             await axios.put(`${API_BASE_URL}/beneficiarios/${beneficiarioId}`, {
               ...beneficiarioExistente,
               clienteId: clienteId,
             })
-            console.log("Beneficiario actualizado con clienteId:", clienteId)
           }
         } else {
-          // 2.3 Crear nuevo usuario para el beneficiario y asociar rol Beneficiario
-          console.log("Creando nuevo usuario:", usuarioBeneficiario);
-          let usuarioId = null;
-          let usuarioHasRolId = null;
+          // Crear nuevo usuario y beneficiario (código existente...)
+          let usuarioId = null
+          let usuarioHasRolId = null
+
           try {
-            // 1. Crear usuario
             const usuarioResponse = await axios.post(`${API_BASE_URL}/usuarios`, {
               nombre: usuarioBeneficiario.nombre,
               apellido: usuarioBeneficiario.apellido,
@@ -479,33 +402,25 @@ const VentaMatriculas = () => {
               contrasena: usuarioBeneficiario.contrasena,
               documento: usuarioBeneficiario.documento,
               tipo_de_documento: beneficiario.tipoDocumento,
-              rol: 'usuario', // Rol por defecto válido según el modelo
+              rol: "usuario",
               estado: true,
-            });
-            usuarioId = usuarioResponse.data._id;
-            console.log("Usuario creado exitosamente:", usuarioId);
+            })
+            usuarioId = usuarioResponse.data._id
 
-            // 2. Obtener el rol 'Beneficiario'
-            const rolesResponse = await axios.get(`${API_BASE_URL}/roles`);
-            const roles = Array.isArray(rolesResponse.data.roles)
-              ? rolesResponse.data.roles
-              : rolesResponse.data;
-            const beneficiarioRol = roles.find((rol) => rol.nombre.toLowerCase() === "beneficiario");
-            if (!beneficiarioRol) throw new Error('Rol "Beneficiario" no encontrado');
+            const rolesResponse = await axios.get(`${API_BASE_URL}/roles`)
+            const roles = Array.isArray(rolesResponse.data.roles) ? rolesResponse.data.roles : rolesResponse.data
+            const beneficiarioRol = roles.find((rol) => rol.nombre.toLowerCase() === "beneficiario")
+            if (!beneficiarioRol) throw new Error('Rol "Beneficiario" no encontrado')
 
-            // 3. Crear relación usuario-rol
             const usuarioHasRolResponse = await axios.post(`${API_BASE_URL}/usuarios_has_rol`, {
               usuarioId: usuarioId,
               rolId: beneficiarioRol._id,
-            });
-            // La respuesta es un array, tomamos el primero
+            })
             usuarioHasRolId = Array.isArray(usuarioHasRolResponse.data)
               ? usuarioHasRolResponse.data[0]._id
-              : usuarioHasRolResponse.data._id;
-            console.log("usuario_has_rolId:", usuarioHasRolId);
+              : usuarioHasRolResponse.data._id
 
-            // 4. Crear beneficiario
-            let beneficiarioPayload = {
+            const beneficiarioPayload = {
               nombre: beneficiario.nombre,
               apellido: beneficiario.apellido,
               tipo_de_documento: beneficiario.tipoDocumento,
@@ -516,138 +431,177 @@ const VentaMatriculas = () => {
               correo: beneficiario.correo,
               estado: beneficiario.estado,
               usuario_has_rolId: usuarioHasRolId,
-              clienteId: clienteEsBeneficiario ? "cliente" : clienteId, // Usar el clienteId real del cliente creado
-            };
-            
-            console.log("=== PAYLOAD PARA CREAR BENEFICIARIO ===");
-            console.log("BeneficiarioPayload:", JSON.stringify(beneficiarioPayload, null, 2));
-            console.log("clienteEsBeneficiario:", clienteEsBeneficiario);
-            console.log("clienteId:", clienteId);
-            console.log("usuarioHasRolId:", usuarioHasRolId);
-            console.log("=======================================");
-            
-            const beneficiarioResponse = await axios.post(`${API_BASE_URL}/beneficiarios`, beneficiarioPayload);
-            beneficiarioId = beneficiarioResponse.data._id;
-            console.log("Beneficiario creado:", beneficiarioId);
+              clienteId: clienteEsBeneficiario ? "cliente" : clienteId,
+            }
 
-            // Si el beneficiario es su propio cliente, actualizar clienteId a su propio _id
+            const beneficiarioResponse = await axios.post(`${API_BASE_URL}/beneficiarios`, beneficiarioPayload)
+            beneficiarioId = beneficiarioResponse.data._id
+
             if (clienteEsBeneficiario) {
               await axios.put(`${API_BASE_URL}/beneficiarios/${beneficiarioId}`, {
                 clienteId: beneficiarioId,
-              });
-              console.log("Beneficiario configurado como su propio cliente");
-            } else {
-              console.log("Beneficiario vinculado al cliente:", clienteId);
-              console.log("=== RELACIÓN CLIENTE-BENEFICIARIO ===");
-              console.log("Cliente ID:", clienteId, "(solo cliente)");
-              console.log("Beneficiario ID:", beneficiarioId, "(beneficiario del cliente)");
-              console.log("=====================================");
+              })
             }
           } catch (error) {
-            console.error("Error al crear usuario/beneficiario:", error.response?.data);
-            console.error("Error completo:", error);
-            console.error("Response data:", error.response?.data);
-            console.error("Response status:", error.response?.status);
-            throw new Error("Error al crear el usuario/beneficiario: " + (error.response?.data?.message || "Error desconocido"));
+            console.error("Error al crear usuario/beneficiario:", error.response?.data)
+            throw new Error(
+              "Error al crear el usuario/beneficiario: " + (error.response?.data?.message || "Error desconocido"),
+            )
           }
         }
       }
 
-      // 3. Usar la matrícula seleccionada
+      // 2. ✅ CREAR VENTA DE MATRÍCULA - CONTADOR MANUAL
       const matriculaSeleccionada = matriculas.find((m) => m._id === matricula.matriculaId)
       if (!matriculaSeleccionada) {
         throw new Error("No se encontró la matrícula seleccionada")
       }
-      
-      console.log("=== MATRÍCULA SELECCIONADA ===");
-      console.log("MatriculaSeleccionada:", JSON.stringify(matriculaSeleccionada, null, 2));
-      console.log("FechaInicio:", matriculaSeleccionada.fechaInicio);
-      console.log("FechaFin:", matriculaSeleccionada.fechaFin);
-      console.log("ValorMatricula:", matriculaSeleccionada.valorMatricula);
-      console.log("==============================");
 
-      // 4. Crear o actualizar venta tipo "matricula" con contador
-      const fechaInicio = new Date(); // Hoy
-      const fechaFin = new Date();
-      fechaFin.setFullYear(fechaFin.getFullYear() + 1); // Un año después
-      
-      const ventaMatricula = {
-        tipo: "matricula",
-        fechaInicio: fechaInicio,
-        fechaFin: fechaFin,
-        estado: matricula.estado || "vigente",
-        valor_total: Number.parseFloat(matriculaSeleccionada.valorMatricula || matricula.valorFinal || 0),
-        beneficiarioId: beneficiarioId,
-        matriculaId: matriculaSeleccionada._id,
-        observaciones: matricula.observaciones,
-        descuento: Number.parseFloat(matricula.descuento || 0),
-      };
-      
-      console.log("=== FECHAS DE MATRÍCULA ===");
-      console.log("Fecha Inicio:", fechaInicio.toISOString());
-      console.log("Fecha Fin:", fechaFin.toISOString());
-      console.log("===========================");
+      const fechaInicio = new Date()
+      const fechaFin = new Date()
+      fechaFin.setFullYear(fechaFin.getFullYear() + 1)
+
+      let ventaMatriculaId = null
+      let codigoMatricula = null
 
       if (isEditing && selectedVenta?._original?._id) {
-        console.log("Actualizando venta existente:", selectedVenta._original._id);
-        await axios.put(`${API_BASE_URL}/ventas/${selectedVenta._original._id}`, ventaMatricula);
-      } else {
-        console.log("Creando nueva venta de matrícula");
-        // Obtener y aumentar contador de matrículas
-        const contadorMatriculaResponse = await axios.patch(`${API_BASE_URL}/contador/matricula/incrementar`);
-        const consecutivoMatricula = contadorMatriculaResponse.data.contador.seq;
-        const codigoMatricula = `MA${consecutivoMatricula.toString().padStart(4, "0")}`;
-        ventaMatricula.consecutivo = consecutivoMatricula;
-        ventaMatricula.codigoVenta = codigoMatricula;
-        
-        console.log("=== DATOS A ENVIAR PARA VENTA MATRÍCULA ===");
-        console.log("VentaMatricula:", JSON.stringify(ventaMatricula, null, 2));
-        console.log("Consecutivo:", consecutivoMatricula);
-        console.log("Código:", codigoMatricula);
-        console.log("===========================================");
-        
-        const matriculaVentaResponse = await axios.post(`${API_BASE_URL}/ventas`, ventaMatricula);
-        console.log("Venta de matrícula creada:", matriculaVentaResponse.data._id);
-
-        // 5. Crear venta tipo "curso" si hay curso seleccionado
-        if (curso && curso.curso) {
-          console.log("Creando venta de curso");
-          const cursoObj = cursosDisponibles.find((c) => c.nombre === curso.curso);
-          // Obtener y aumentar contador de cursos
-          const contadorCursoResponse = await axios.patch(`${API_BASE_URL}/contador/curso/incrementar`);
-          const consecutivoCurso = contadorCursoResponse.data.contador.seq;
-          const codigoCurso = `CU${consecutivoCurso.toString().padStart(4, "0")}`;
-          const ventaCurso = {
-            tipo: "curso",
-            fechaInicio: matricula.fechaInicio,
-            fechaFin: matricula.fechaFin,
-            beneficiarioId: beneficiarioId,
-            cursoId: cursoObj ? cursoObj._id : undefined,
-            matriculaId: matriculaSeleccionada._id,
-            numero_de_clases: Number.parseInt(curso.clases),
-            valor_total: Number.parseFloat(curso.valorTotal),
-            estado: "vigente",
-            consecutivo: consecutivoCurso,
-            codigoVenta: codigoCurso,
-          };
-          const cursoVentaResponse = await axios.post(`${API_BASE_URL}/ventas`, ventaCurso);
-          console.log("Venta de curso creada:", cursoVentaResponse.data._id);
+        const ventaMatricula = {
+          tipo: "matricula",
+          fechaInicio: fechaInicio,
+          fechaFin: fechaFin,
+          estado: matricula.estado || "vigente",
+          valor_total: Number.parseFloat(matriculaSeleccionada.valorMatricula || matricula.valorFinal || 0),
+          beneficiarioId: beneficiarioId,
+          matriculaId: matriculaSeleccionada._id,
+          observaciones: matricula.observaciones,
+          descuento: Number.parseFloat(matricula.descuento || 0),
         }
+
+        await axios.put(`${API_BASE_URL}/ventas/${selectedVenta._original._id}`, ventaMatricula)
+        ventaMatriculaId = selectedVenta._original._id
+        codigoMatricula = selectedVenta._original.codigoVenta
+      } else {
+        // ✅ INCREMENTAR CONTADOR DE MATRÍCULA UNA SOLA VEZ
+        const consecutivoMatricula = await incrementarContador("matricula")
+        codigoMatricula = `MA-${consecutivoMatricula.toString().padStart(4, "0")}`
+
+        const ventaMatricula = {
+          tipo: "matricula",
+          fechaInicio: fechaInicio,
+          fechaFin: fechaFin,
+          estado: matricula.estado || "vigente",
+          valor_total: Number.parseFloat(matriculaSeleccionada.valorMatricula || matricula.valorFinal || 0),
+          beneficiarioId: beneficiarioId,
+          matriculaId: matriculaSeleccionada._id,
+          observaciones: matricula.observaciones,
+          descuento: Number.parseFloat(matricula.descuento || 0),
+          consecutivo: consecutivoMatricula,
+          codigoVenta: codigoMatricula,
+          // ✅ DATOS DE PAGO PARA EL MIDDLEWARE
+          metodoPago: pago?.metodoPago || "Efectivo",
+          numeroTransaccion: pago?.numeroTransaccion || null,
+          fechaPago: pago?.fechaPago || new Date().toISOString(),
+        }
+
+        console.log("✅ Enviando venta de matrícula al middleware:")
+        console.log("  - Tipo:", ventaMatricula.tipo)
+        console.log("  - Método de pago:", ventaMatricula.metodoPago)
+
+        // ✅ HEADERS PARA PERMITIR QUE EL MIDDLEWARE MANEJE PAGO
+        // ✅ HEADERS PARA MATRÍCULA: Contador manual, pago automático
+        const headersPermitirMiddleware = {
+          "Content-Type": "application/json",
+          "x-skip-auto-payment": "false", // ✅ Permitir que el middleware cree el pago
+          "x-skip-auto-counter": "true", // 🚫 Ya incrementamos el contador manualmente
+          "x-source-module": "VentaMatriculas",
+        }
+
+        const matriculaVentaResponse = await axios.post(`${API_BASE_URL}/ventas`, ventaMatricula, {
+          headers: headersPermitirMiddleware,
+          timeout: 10000,
+        })
+        ventaMatriculaId = matriculaVentaResponse.data._id
+
+        console.log("✅ Venta de matrícula creada:", ventaMatriculaId)
       }
 
-      // Actualizar listas locales
+      // 3. ✅ CREAR VENTA DE CURSO - EXACTAMENTE COMO VentaCursos.jsx
+      if (curso && curso.curso && !isEditing) {
+        console.log("=== CREANDO VENTA DE CURSO (COMPLETAMENTE AUTOMÁTICO) ===")
+        const cursoObj = cursosDisponibles.find((c) => c.nombre === curso.curso)
+
+        if (!cursoObj) {
+          throw new Error("No se encontró el curso seleccionado")
+        }
+
+        const siguienteConsecutivoResponse = await axios.get(`${API_BASE_URL}/ventas/next-consecutivo`)
+        console.log("📊 Respuesta del consecutivo:", siguienteConsecutivoResponse.data)
+
+        const nextConsecutivo = siguienteConsecutivoResponse.data?.nextConsecutivo
+        if (nextConsecutivo === undefined || nextConsecutivo === null || isNaN(nextConsecutivo)) {
+          throw new Error(`Error al obtener el consecutivo: ${JSON.stringify(siguienteConsecutivoResponse.data)}`)
+        }
+
+        const ventaCurso = {
+          tipo: "curso",
+          fechaInicio: matricula.fechaInicio,
+          fechaFin: matricula.fechaFin,
+          beneficiarioId: beneficiarioId,
+          cursoId: cursoObj._id,
+          matriculaId: matriculaSeleccionada._id,
+          numero_de_clases: Number.parseInt(curso.clases),
+          valor_total: Number.parseFloat(curso.valorTotal),
+          estado: "vigente",
+          consecutivo: nextConsecutivo,
+          codigoVenta: `CU-${String(nextConsecutivo).padStart(4, "0")}`,
+          // ✅ DATOS DE PAGO PARA EL MIDDLEWARE
+          metodoPago: pago?.metodoPago || "Efectivo",
+          numeroTransaccion: pago?.numeroTransaccion || null,
+          fechaPago: pago?.fechaPago || new Date().toISOString(),
+        }
+
+        console.log("✅ Enviando venta de curso:")
+        console.log("  - Consecutivo:", ventaCurso.consecutivo)
+        console.log("  - Código:", ventaCurso.codigoVenta)
+
+        const cursoVentaResponse = await axios.post(`${API_BASE_URL}/ventas`, ventaCurso, {
+          timeout: 10000,
+        })
+        console.log("✅ Venta de curso creada:", cursoVentaResponse.data._id)
+      }
+
       await fetchBeneficiarios()
       await fetchMatriculas()
       handleCloseForm()
-      showSuccess("Matrícula guardada exitosamente")
+      showSuccess("Matrícula y pago(s) guardados exitosamente")
     } catch (error) {
-      console.error("Error al guardar la matrícula:", error)
+      console.error("❌ ERROR GENERAL en handleSubmit:")
+      console.error("  - Mensaje:", error.message)
+      console.error("  - Stack completo:", error.stack)
+
+      if (error.response) {
+        console.error("  - Response status:", error.response.status)
+        console.error("  - Response data:", JSON.stringify(error.response.data, null, 2))
+        console.error("  - Response headers:", error.response.headers)
+      }
+
+      if (error.config) {
+        console.error("  - Request URL:", error.config.url)
+        console.error("  - Request method:", error.config.method)
+        console.error("  - Request data:", error.config.data)
+        console.error("  - Request headers:", error.config.headers)
+      }
 
       let errorMessage = "Error desconocido"
       if (error.message) {
         errorMessage = error.message
-      } else if (error?.response?.data?.message) {
-        errorMessage = error.response.data.message
+      }
+      if (error.response?.status === 400) {
+        console.error("❌ Error 400 - Bad Request:")
+        console.error("  - Status:", error.response.status)
+        console.error("  - Data:", error.response.data)
+        console.error("  - Request data:", error.config?.data)
+        errorMessage = `Error 400: ${error.response.data?.message || "Solicitud inválida"}`
       }
 
       showError("Error al guardar la matrícula: " + errorMessage)
@@ -655,8 +609,11 @@ const VentaMatriculas = () => {
   }
 
   const handleAnular = (venta) => {
-    // Buscar la venta original
     const ventaOriginal = ventasOriginales.find((v) => v.id === venta.id)
+    if (ventaOriginal?.estado?.toLowerCase() === "anulada") {
+      showError("La matrícula ya está anulada")
+      return
+    }
     setVentaToAnular(ventaOriginal)
     setMotivoAnulacion("")
     setAnularModalOpen(true)
@@ -670,38 +627,49 @@ const VentaMatriculas = () => {
 
     if (ventaToAnular) {
       try {
-        console.log("ID de la venta a anular:", ventaToAnular._original._id)
-        console.log("Motivo de anulación:", motivoAnulacion.trim())
-
-        // Obtener la venta completa primero para tener todos los datos
-        const ventaResponse = await axios.get(`${API_BASE_URL}/ventas/${ventaToAnular._original._id}`)
-        const ventaCompleta = ventaResponse.data
-        
-        // Actualizar solo los campos necesarios manteniendo el resto
-        const datosActualizados = {
-          ...ventaCompleta,
-          estado: "anulada",
-          motivoAnulacion: motivoAnulacion.trim()
+        const datosActualizacion = {
+          motivoAnulacion: motivoAnulacion.trim(),
         }
-        
-        console.log("Datos a enviar para actualización:", datosActualizados)
-        
-        // Usar PUT con todos los datos para evitar validaciones
-        await axios.put(`${API_BASE_URL}/ventas/${ventaToAnular._original._id}`, datosActualizados)
 
-        fetchMatriculas()
+        const response = await axios.patch(
+          `${API_BASE_URL}/ventas/${ventaToAnular._original._id}/anular`,
+          datosActualizacion,
+        )
+
+        await fetchMatriculas()
+
         setAnularModalOpen(false)
         setVentaToAnular(null)
         setMotivoAnulacion("")
+
         showSuccess("Matrícula anulada exitosamente")
       } catch (error) {
-        console.error("Error al anular la matrícula:", error)
-        console.error("Detalles del error:", error.response?.data)
-        console.error("Error completo:", error)
-        console.error("Response status:", error.response?.status)
-        console.error("Response headers:", error.response?.headers)
-        showError("Error al anular la matrícula: " + (error.response?.data?.message || "Error desconocido"))
+        console.error("Error al anular matrícula:", error)
+
+        let errorMessage = "Error desconocido al anular la matrícula"
+
+        if (error.response?.data?.message) {
+          errorMessage = error.response.data.message
+        } else if (error.message) {
+          errorMessage = error.message
+        }
+
+        showError(`Error al anular la matrícula: ${errorMessage}`)
       }
+    }
+  }
+
+  // ✅ FUNCIÓN PARA INCREMENTAR EL CONTADOR DE MATRÍCULA
+  const incrementarContador = async (tipo) => {
+    try {
+      console.log(`=== INCREMENTANDO CONTADOR DE ${tipo.toUpperCase()} ===`)
+      const response = await axios.patch(`${API_BASE_URL}/contador/${tipo}/incrementar`)
+      const nuevoConsecutivo = response.data.contador.seq
+      console.log(`✅ Contador de ${tipo.toUpperCase()} actualizado:`, nuevoConsecutivo)
+      return nuevoConsecutivo
+    } catch (error) {
+      console.error(`❌ Error al incrementar contador de ${tipo.toUpperCase()}:`, error)
+      throw error
     }
   }
 
@@ -710,7 +678,6 @@ const VentaMatriculas = () => {
       <GenericList
         data={ventas}
         columns={columns}
-        
         onDelete={handleDelete}
         onCreate={handleCreate}
         onView={handleView}
@@ -774,30 +741,36 @@ const VentaMatriculas = () => {
       />
 
       {/* Modal de confirmación para anular */}
-      <Dialog open={anularModalOpen} onClose={() => setAnularModalOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Anular Matrícula</DialogTitle>
-        <DialogContent>
-          <Typography sx={{ mb: 2 }}>
-            ¿Está seguro de que desea anular la matrícula de {ventaToAnular?.beneficiario}?
-          </Typography>
-          <TextField
-            fullWidth
-            label="Motivo de anulación"
-            multiline
-            rows={3}
-            value={motivoAnulacion}
-            onChange={(e) => setMotivoAnulacion(e.target.value)}
-            placeholder="Ingrese el motivo por el cual se anula esta matrícula..."
-            required
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAnularModalOpen(false)}>Cancelar</Button>
-          <Button onClick={confirmAnular} color="warning" variant="contained" disabled={!motivoAnulacion.trim()}>
-            Anular Matrícula
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ConfirmationDialog
+        open={anularModalOpen}
+        onClose={() => setAnularModalOpen(false)}
+        onConfirm={confirmAnular}
+        title="Confirmar Anulación"
+        content={
+          <>
+            <div style={{ marginBottom: 12 }}>
+              ¿Está seguro de que desea anular la matrícula de <b>{ventaToAnular?.beneficiario}</b>?
+            </div>
+            <TextField
+              fullWidth
+              label="Motivo de anulación"
+              multiline
+              rows={3}
+              value={motivoAnulacion}
+              onChange={(e) => setMotivoAnulacion(e.target.value)}
+              placeholder="Ingrese el motivo por el cual se anula esta matrícula..."
+              required
+              error={motivoAnulacion.trim() === "" && motivoAnulacion !== ""}
+              helperText={motivoAnulacion.trim() === "" && motivoAnulacion !== "" ? "El motivo es requerido" : ""}
+              sx={{ mt: 2 }}
+            />
+          </>
+        }
+        confirmButtonText="Anular Matrícula"
+        confirmButtonColor="#ff9800"
+        cancelButtonText="Cancelar"
+        confirmButtonDisabled={!motivoAnulacion.trim()}
+      />
     </>
   )
 }
