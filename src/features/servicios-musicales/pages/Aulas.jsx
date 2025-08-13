@@ -6,10 +6,8 @@ import { StatusButton } from '../../../shared/components/StatusButton';
 import { FormModal } from '../../../shared/components/formModal2';
 import { SuccessAlert } from '../../../shared/components/SuccessAlert';
 import { ConfirmationDialog } from '../../../shared/components/ConfirmationDialog';
-import { useAuth } from '../../../features/auth/context/AuthContext';
 
 const Aulas = () => {
-  const { user } = useAuth(); // Obtener el usuario autenticado
   const [aulas, setAulas] = useState([]);
   const [selectedAula, setSelectedAula] = useState(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -21,9 +19,6 @@ const Aulas = () => {
   });
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [aulaToDelete, setAulaToDelete] = useState(null);
-  
-  // Verificar si el usuario es profesor
-  const isProfesor = user?.role === 'profesor';
 
   const columns = [
     { id: 'numeroAula', label: 'Número de Aula' },
@@ -69,7 +64,8 @@ const Aulas = () => {
       label: 'Capacidad', 
       type: 'number',
       required: true,
-      min: 1
+      min: 1,
+      max: 50
     },
     { 
       id: 'estado', 
@@ -133,15 +129,6 @@ const Aulas = () => {
   };
 
   const handleDelete = (aula) => {
-    // Profesores no pueden eliminar aulas
-    if (isProfesor) {
-      setAlert({
-        open: true,
-        message: 'Los profesores no pueden eliminar aulas'
-      });
-      return;
-    }
-    
     setAulaToDelete(aula);
     setConfirmDialogOpen(true);
   };
@@ -150,7 +137,7 @@ const Aulas = () => {
     if (!aulaToDelete) return;
 
     try {
-      await axios.delete(`http://localhost:3000/api/aulas/${aulaToDelete._id}`);
+      const response = await axios.delete(`http://localhost:3000/api/aulas/${aulaToDelete._id}`);
       await fetchAulas(); // Recargar los datos después de eliminar
       setAlert({
         open: true,
@@ -158,10 +145,19 @@ const Aulas = () => {
       });
     } catch (error) {
       console.error('Error deleting aula:', error);
-      setAlert({
-        open: true,
-        message: 'Error al eliminar el aula'
-      });
+      
+      // Manejar el error específico cuando el aula está asociada a programaciones
+      if (error.response?.status === 400) {
+        setAlert({
+          open: true,
+          message: error.response.data.message || 'No se puede eliminar el aula porque está asociada a programaciones de clases'
+        });
+      } else {
+        setAlert({
+          open: true,
+          message: 'Error al eliminar el aula'
+        });
+      }
     } finally {
       setConfirmDialogOpen(false);
       setAulaToDelete(null);
@@ -201,30 +197,12 @@ const Aulas = () => {
   };
 
   const handleCreate = () => {
-    // Profesores no pueden crear aulas
-    if (isProfesor) {
-      setAlert({
-        open: true,
-        message: 'Los profesores no pueden crear aulas'
-      });
-      return;
-    }
-    
     setIsEditing(false);
     setSelectedAula(null);
     setFormModalOpen(true);
   };
 
   const handleEdit = (aula) => {
-    // Profesores no pueden editar aulas
-    if (isProfesor) {
-      setAlert({
-        open: true,
-        message: 'Los profesores no pueden editar aulas'
-      });
-      return;
-    }
-    
     setIsEditing(true);
     setSelectedAula(aula);
     setFormModalOpen(true);
@@ -260,13 +238,10 @@ const Aulas = () => {
         columns={columns}
         onEdit={handleEdit}
         onDelete={handleDelete}
-        onCreate={isProfesor ? null : handleCreate}
+        onCreate={handleCreate}
         onView={handleView}
         title="Gestión de Aulas"
         enableFilters={true}
-        showEditButton={!isProfesor}
-        showDeleteButton={!isProfesor}
-        showViewButton={true}
       />
       
       <DetailModal
@@ -297,7 +272,9 @@ const Aulas = () => {
       <ConfirmationDialog
         open={confirmDialogOpen}
         title="Confirmar Eliminación"
-        content={`¿Está seguro que desea eliminar el aula ${aulaToDelete?.numeroAula}?`}
+        content={`¿Está seguro que desea eliminar el aula ${aulaToDelete?.numeroAula}? 
+
+Esta acción no se puede deshacer. Si el aula está asociada a programaciones de clases, no se podrá eliminar.`}
         onConfirm={handleConfirmDelete}
         onClose={() => setConfirmDialogOpen(false)}
         confirmButtonColor="#f44336"

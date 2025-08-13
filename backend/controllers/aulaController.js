@@ -1,4 +1,6 @@
 const Aula = require('../models/Aula');
+const ProgramacionClase = require('../models/ProgramacionClase');
+const ProgramacionProfesor = require('../models/ProgramacionProfesor');
 
 // GET - Get all classrooms
 exports.getAulas = async (req, res) => {
@@ -60,13 +62,39 @@ exports.updateAula = async (req, res) => {
 exports.deleteAula = async (req, res) => {
   try {
     const aula = await Aula.findById(req.params.id);
-    if (aula) {
-      await aula.deleteOne();
-      res.json({ message: 'Classroom deleted' });
-    } else {
-      res.status(404).json({ message: 'Classroom not found' });
+    if (!aula) {
+      return res.status(404).json({ message: 'Classroom not found' });
     }
+
+    // Verificar si el aula está asociada a alguna programación
+    // Buscar en programaciones de clases que puedan tener referencia al aula
+    const programacionesClase = await ProgramacionClase.find({
+      $or: [
+        { aula: aula._id },
+        { 'aula.numeroAula': aula.numeroAula }
+      ]
+    });
+
+    // Buscar en programaciones de profesores que puedan tener referencia al aula
+    const programacionesProfesor = await ProgramacionProfesor.find({
+      $or: [
+        { aula: aula._id },
+        { 'aula.numeroAula': aula.numeroAula }
+      ]
+    });
+
+    // Si hay programaciones asociadas, no permitir la eliminación
+    if (programacionesClase.length > 0 || programacionesProfesor.length > 0) {
+      return res.status(400).json({ 
+        message: 'No se puede eliminar el aula porque está asociada a programaciones de clases. Considere cambiar su estado a "Inactivo" en lugar de eliminarla.' 
+      });
+    }
+
+    // Si no hay programaciones asociadas, proceder con la eliminación
+    await aula.deleteOne();
+    res.json({ message: 'Classroom deleted successfully' });
   } catch (error) {
+    console.error('Error deleting aula:', error);
     res.status(500).json({ message: error.message });
   }
 };

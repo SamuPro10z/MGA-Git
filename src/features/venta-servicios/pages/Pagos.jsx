@@ -861,76 +861,9 @@ const Pagos = () => {
     fetchPagos();
   }, [isCliente, user?.documento]);
 
-  const handleEdit = (payment) => {
-    console.log('=== EDITING PAYMENT ===');
-    console.log('Payment to edit:', JSON.stringify(payment, null, 2));
-    
-    // Clientes no pueden editar pagos
-    if (isCliente) {
-      setAlert({
-        open: true,
-        message: 'Los clientes no pueden editar pagos'
-      });
-      return;
-    }
-    
-    // No permitir editar grupos directamente
-    if (payment.es_grupo) {
-      setAlert({
-        open: true,
-        message: 'No se puede editar un grupo de pagos. Seleccione un pago individual.'
-      });
-      return;
-    }
-    
-    setIsEditing(true);
-    setSelectedPayment(payment);
-    setFormModalOpen(true);
-  };
 
-  const handleDelete = async (payment) => {
-    console.log('=== DELETING PAYMENT ===');
-    console.log('Payment to delete:', JSON.stringify(payment, null, 2));
-    
-    // Clientes no pueden eliminar pagos
-    if (isCliente) {
-      setAlert({
-        open: true,
-        message: 'Los clientes no pueden eliminar pagos'
-      });
-      return;
-    }
-    
-    // No permitir eliminar grupos directamente
-    if (payment.es_grupo) {
-      setAlert({
-        open: true,
-        message: 'No se puede eliminar un grupo de pagos. Seleccione un pago individual.'
-      });
-      return;
-    }
-    
-    const beneficiario = getBeneficiarioInfo(payment);
-    const beneficiarioNombre = formatearNombreCompleto(beneficiario);
-    
-    const confirmDelete = window.confirm(`¿Está seguro de eliminar el pago de ${beneficiarioNombre}?`);
-    if (confirmDelete) {
-      try {
-        await axios.delete(`http://localhost:3000/api/pagos/${payment._id}`);
-        await fetchPagos();
-        setAlert({
-          open: true,
-          message: 'Pago eliminado correctamente'
-        });
-      } catch (error) {
-        console.error('Error deleting payment:', error);
-        setAlert({
-          open: true,
-          message: error.response?.data?.message || 'Error al eliminar el pago'
-        });
-      }
-    }
-  };
+
+
 
   const handleSubmit = async (formData) => {
     try {
@@ -1080,13 +1013,11 @@ const Pagos = () => {
         columns={columns}
         rowKey="_id" // Asegurarse de que esta prop esté presente
         onView={handleView}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
         onCreate={isCliente ? null : handleCreate}
         onExportPdf={handleExportExcel}
         title="Gestión de Pagos"
-        showEditButton={!isCliente}
-        showDeleteButton={!isCliente}
+        showEditButton={false}
+        showDeleteButton={false}
         showViewButton={true}
       />
       

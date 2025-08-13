@@ -44,6 +44,7 @@ const Profesores = () => {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [professorToDelete, setProfessorToDelete] = useState(null);
 
+
   // Define columns with unique keys
   const columns = [
     { id: 'nombres', label: 'Nombres' },
@@ -58,7 +59,7 @@ const Profesores = () => {
       render: (value, row) => (
         <StatusButton 
           key={`status-${row._id}`}
-          active={String(value) === 'Activo'} 
+          active={value === 'Activo'} 
           onClick={() => handleToggleStatus(row._id)}
         />
       )
@@ -96,7 +97,7 @@ const Profesores = () => {
         </Box>
       )
     },
-    { id: 'estado', label: 'Estado', render: (value) => <StatusButton active={String(value) === 'Activo'} /> }
+    { id: 'estado', label: 'Estado', render: (value) => <StatusButton active={value === 'Activo'} /> }
   ];
 
   // Fetch professors from API with better error handling
@@ -170,11 +171,20 @@ const Profesores = () => {
       });
     } catch (error) {
       console.error('Error deleting professor:', error);
-      const errorMessage = error.response?.data?.message || error.response?.data?.details || 'Error al eliminar el profesor';
-      setAlert({
-        open: true,
-        message: errorMessage
-      });
+      
+      // Manejar el error específico cuando el profesor está asociado a programaciones
+      if (error.response?.status === 400) {
+        setAlert({
+          open: true,
+          message: error.response.data.message || 'No se puede eliminar el profesor porque está asociado a programaciones de clases'
+        });
+      } else {
+        const errorMessage = error.response?.data?.message || error.response?.data?.details || 'Error al eliminar el profesor';
+        setAlert({
+          open: true,
+          message: errorMessage
+        });
+      }
     } finally {
       setConfirmDialogOpen(false);
       setProfessorToDelete(null);
@@ -409,6 +419,28 @@ const Profesores = () => {
     });
   };
 
+  // Funciones de validación en tiempo real
+  const validateTelefono = (value) => {
+    if (!value) return 'El teléfono es requerido';
+    if (value.length < 7) return 'El teléfono debe tener al menos 7 caracteres';
+    if (value.length > 15) return 'El teléfono no puede exceder 15 caracteres';
+    const telefonoRegex = /^[0-9+\-\s().ext]+$/;
+    if (!telefonoRegex.test(value)) return 'El teléfono solo permite números, espacios, guiones y extensiones';
+    return null;
+  };
+
+  const validatePassword = (value) => {
+    if (!value) return 'La contraseña es requerida';
+    if (value.length > 20) return 'La contraseña no puede exceder 20 caracteres';
+    return null;
+  };
+
+  const validateConfirmPassword = (value, password) => {
+    if (!value) return 'Debe confirmar la contraseña';
+    if (value !== password) return 'Las contraseñas no coinciden';
+    return null;
+  };
+
   const handleExportPdf = () => {
     import('jspdf').then(({ jsPDF }) => {
       const doc = new jsPDF();
@@ -488,7 +520,11 @@ const Profesores = () => {
         id: 'telefono', 
         label: 'Teléfono *', 
         type: 'text',
-        required: true
+        required: true,
+        maxLength: 15,
+        helperText: 'Mínimo 7, máximo 15 caracteres',
+        validateOnChange: true,
+        validate: (value) => validateTelefono(value)
       },
       { 
         id: 'direccion', 
@@ -536,7 +572,7 @@ const Profesores = () => {
               <Chip 
                 key={`form-schedule-${idx}`}
                 size="small"
-                label={`${prog.dia}: ${prog.horaInicio} - ${prog.horaFin}`}
+                label={`${prog.dia}: ${prog.horaInicio} - ${prog.horaFin}`} 
                 onDelete={() => {
                   const newProgramacion = [...tempProgramacion];
                   newProgramacion.splice(idx, 1);
@@ -566,19 +602,21 @@ const Profesores = () => {
           id: 'password',
           label: 'Contraseña *',
           type: 'password',
-          required: true
+          required: true,
+          maxLength: 20,
+          helperText: 'Máximo 20 caracteres',
+          validateOnChange: true,
+          validate: (value, formData) => validatePassword(value)
         },
         {
           id: 'confirmPassword',
           label: 'Confirmar Contraseña *',
           type: 'password',
           required: true,
-          validate: (value, formData) => {
-            if (value !== formData.password) {
-              return 'Las contraseñas no coinciden';
-            }
-            return null;
-          }
+          maxLength: 20,
+          helperText: 'Debe coincidir con la contraseña',
+          validateOnChange: true,
+          validate: (value, formData) => validateConfirmPassword(value, formData.password)
         }
       );
     }
@@ -632,23 +670,25 @@ const Profesores = () => {
         onSubmit={handleAddSchedule}
       />
       
-      <ConfirmationDialog
-        open={confirmDialogOpen}
-        title="Confirmar Eliminación"
-        content={`¿Está seguro que desea eliminar al profesor ${professorToDelete?.nombres} ${professorToDelete?.apellidos}?`}
-        onConfirm={handleConfirmDelete}
-        onClose={() => setConfirmDialogOpen(false)}
-        confirmButtonColor="#f44336"
-        confirmButtonText="Eliminar"
-      />
-      
-      <SuccessAlert
-        open={alert.open}
-        message={alert.message}
-        onClose={handleCloseAlert}
-      />
-    </>
-  );
+             <ConfirmationDialog
+         open={confirmDialogOpen}
+         title="Confirmar Eliminación"
+         content={`¿Está seguro que desea eliminar al profesor ${professorToDelete?.nombres} ${professorToDelete?.apellidos}? 
+
+Esta acción no se puede deshacer. Si el profesor está asociado a programaciones de clases, no se podrá eliminar.`}
+         onConfirm={handleConfirmDelete}
+         onClose={() => setConfirmDialogOpen(false)}
+         confirmButtonColor="#f44336"
+         confirmButtonText="Eliminar"
+       />
+       
+       <SuccessAlert
+         open={alert.open}
+         message={alert.message}
+         onClose={handleCloseAlert}
+       />
+     </>
+   );
 };
 
 export default Profesores;

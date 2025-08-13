@@ -1,5 +1,9 @@
 const Profesor = require('../models/profesor');
 const Usuario = require('../models/usuario');
+const UsuarioHasRol = require('../models/UsuarioHasRol');
+const Rol = require('../models/rol');
+const ProgramacionClase = require('../models/ProgramacionClase');
+const ProgramacionProfesor = require('../models/ProgramacionProfesor');
 
 // Función auxiliar para manejar errores de validación de Mongoose
 const handleValidationError = (error) => {
@@ -144,6 +148,22 @@ exports.createProfesor = async (req, res) => {
     };
     const usuario = new Usuario(usuarioData);
     await usuario.save();
+
+    // Buscar el rol de profesor
+    const rolProfesor = await Rol.findOne({ nombre: "Profesor" });
+    if (!rolProfesor) {
+      return res.status(400).json({
+        message: 'Rol de profesor no encontrado',
+        details: 'No existe un rol llamado "Profesor" en la base de datos'
+      });
+    }
+
+    // Crear la relación en UsuarioHasRol
+    await UsuarioHasRol.create({
+      usuarioId: usuario._id,
+      rolId: rolProfesor._id,
+      estado: true
+    });
 
     res.status(201).json({
       message: 'Profesor y usuario creados correctamente',
@@ -312,6 +332,28 @@ exports.deleteProfesor = async (req, res) => {
       return res.status(404).json({ message: 'Profesor no encontrado' });
     }
 
+    // Verificar si el profesor está asociado a alguna programación
+    // Buscar en programaciones de clases que puedan tener referencia al profesor
+    const programacionesClase = await ProgramacionClase.find({
+      $or: [
+        { profesor: profesor._id },
+        { 'profesor._id': profesor._id }
+      ]
+    });
+
+    // Buscar en programaciones de profesores que puedan tener referencia al profesor
+    const programacionesProfesor = await ProgramacionProfesor.find({
+      profesor: profesor._id
+    });
+
+    // Si hay programaciones asociadas, no permitir la eliminación
+    if (programacionesClase.length > 0 || programacionesProfesor.length > 0) {
+      return res.status(400).json({ 
+        message: 'No se puede eliminar el profesor porque está asociado a programaciones de clases. Considere cambiar su estado a "Inactivo" en lugar de eliminarlo.' 
+      });
+    }
+
+    // Si no hay programaciones asociadas, proceder con la eliminación
     await profesor.deleteOne();
     res.json({ message: 'Profesor eliminado correctamente' });
     
@@ -387,5 +429,97 @@ exports.cambiarEstadoProfesor = async (req, res) => {
     } else {
       res.status(500).json({ message: 'Error al cambiar el estado del profesor' });
     }
+  }
+};
+
+// GET - Obtener estadísticas de profesores con más estudiantes
+exports.getEstadisticasProfesores = async (req, res) => {
+  try {
+    console.log('🔍 Iniciando consulta de estadísticas de profesores...');
+
+    // Obtener profesores activos
+    const profesoresActivos = await Profesor.find({ estado: 'Activo' });
+    console.log(`📊 Profesores activos encontrados: ${profesoresActivos.length}`);
+
+    if (profesoresActivos.length === 0) {
+      console.log('❌ No hay profesores activos en la base de datos');
+      return res.json([]);
+    }
+
+    // Intentar obtener estadísticas con programación
+    try {
+      const profesoresStats = await Profesor.aggregate([
+        { $match: { estado: 'Activo' } },
+        {
+          $lookup: {
+            from: 'programacion_de_profesores',
+            localField: '_id',
+            foreignField: 'profesor',
+            as: 'programacionesProfesor'
+          }
+        },
+        {
+          $lookup: {
+            from: 'programacion_de_clases',
+            localField: 'programacionesProfesor._id',
+            foreignField: 'programacionProfesor',
+            as: 'programacionesClases'
+          }
+        },
+        {
+          $group: {
+            _id: '$_id',
+            nombre: { $first: { $concat: ['$nombres', ' ', '$apellidos'] } },
+            especialidad: { $first: { $arrayElemAt: ['$especialidades', 0] } },
+            estudiantes: { 
+              $sum: { 
+                $size: {
+                  $filter: {
+                    input: '$programacionesClases',
+                    as: 'clase',
+                    cond: { $ne: ['$$clase.estado', 'cancelada'] }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          $project: {
+            _id: 1,
+            nombre: 1,
+            especialidad: 1,
+            estudiantes: 1
+          }
+        },
+        { $sort: { estudiantes: -1 } },
+        { $limit: 5 }
+      ]);
+
+      console.log('📊 Estadísticas de profesores obtenidas:', profesoresStats);
+      
+      // Si hay datos de programación, devolverlos
+      if (profesoresStats.length > 0) {
+        return res.json(profesoresStats);
+      }
+    } catch (aggregationError) {
+      console.log('⚠️ Error en agregación, usando datos básicos:', aggregationError.message);
+    }
+
+    // Si no hay datos de programación o hay error, devolver profesores activos básicos
+    console.log('⚠️ No hay datos de programación, devolviendo profesores activos básicos');
+    const profesoresBasicos = profesoresActivos.slice(0, 5).map(prof => ({
+      _id: prof._id,
+      nombre: `${prof.nombres} ${prof.apellidos}`,
+      especialidad: prof.especialidades[0] || 'Sin especialidad',
+      estudiantes: 0
+    }));
+    
+    console.log('📊 Profesores básicos devueltos:', profesoresBasicos);
+    res.json(profesoresBasicos);
+
+  } catch (error) {
+    console.error('Error al obtener estadísticas de profesores:', error);
+    res.status(500).json({ message: 'Error al obtener estadísticas de profesores' });
   }
 };
