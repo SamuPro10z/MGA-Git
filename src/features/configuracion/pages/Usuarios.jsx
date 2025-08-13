@@ -153,6 +153,11 @@ const Usuarios = () => {
         try {
           await usuariosService.delete(usuario._id);
           setUsuarios((prev) => prev.filter((item) => item._id !== usuario._id))
+          setAlert({
+            open: true,
+            message: 'Usuario eliminado correctamente',
+            severity: 'success'
+          });
           toast.success('Usuario eliminado correctamente');
         } catch (error) {
           console.error('Error al eliminar usuario:', error);
@@ -597,7 +602,7 @@ const Usuarios = () => {
         required: true,
         validation: (value) => {
           if (!value) return "La contraseña es requerida";
-          const passwordRegex = /^(?=.[a-z])(?=.[A-Z])(?=.\d)(?=.[@$!%?&])[A-Za-z\d@$!%?&]{8,}$/;
+          const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%?&])[A-Za-z\d@$!%?&]{8,}$/;
           return passwordRegex.test(value) ? null : "La contraseña debe tener mínimo 8 caracteres con mayúsculas, minúsculas, números y símbolos";
         }
       },
