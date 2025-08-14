@@ -168,6 +168,7 @@ const formatearMetodoPago = (metodo) => {
 const Pagos = () => {
   const { user } = useAuth(); // Obtener el usuario autenticado
   const [payments, setPayments] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [formModalOpen, setFormModalOpen] = useState(false);
@@ -1019,6 +1020,49 @@ const Pagos = () => {
         showDeleteButton={false}
         showCreateButton={false}
         showViewButton={true}
+        customSearch={(row, term) => {
+          const t = (term || '').toString().toLowerCase().trim();
+          if (!t) return true;
+          // Para grupos
+          if (row.es_grupo) {
+            const nombre = (row.beneficiarioNombre || '').toLowerCase();
+            const doc = (row.beneficiario?.documento || '').toLowerCase();
+            const tel = (row.beneficiario?.telefono || '').toLowerCase();
+            const estado = (row.estado_principal || '').toString().toLowerCase();
+            const metodo = (row.metodo_pago_principal || '').toString().toLowerCase();
+            const fecha = row.fecha_ultimo_pago ? new Date(row.fecha_ultimo_pago).toLocaleDateString('es-CO').toLowerCase() : '';
+            const total = (row.valor_total || 0).toString();
+            const cantidad = (row.cantidad_pagos || 0).toString();
+            return (
+              nombre.includes(t) ||
+              doc.includes(t) ||
+              tel.includes(t) ||
+              estado.includes(t) ||
+              metodo.includes(t) ||
+              fecha.includes(t) ||
+              total.includes(t) ||
+              cantidad.includes(t)
+            );
+          }
+          // Pagos individuales
+          const beneficiario = row.ventas?.beneficiario;
+          const beneNombre = beneficiario ? `${(beneficiario.nombre||'').trim()} ${(beneficiario.apellido||'').trim()}`.trim().toLowerCase() : '';
+          const beneDoc = (beneficiario?.numero_de_documento || beneficiario?.numeroDocumento || beneficiario?.documento || '').toLowerCase();
+          const beneTel = (beneficiario?.telefono || '').toLowerCase();
+          const metodo = (row.metodoPago || '').toString().toLowerCase();
+          const estado = (row.estado || '').toString().toLowerCase();
+          const fecha = row.fechaPago ? new Date(row.fechaPago).toLocaleDateString('es-CO').toLowerCase() : '';
+          const valor = (row.valor_total || row.ventas?.valor_total || 0).toString();
+          return (
+            beneNombre.includes(t) ||
+            beneDoc.includes(t) ||
+            beneTel.includes(t) ||
+            metodo.includes(t) ||
+            estado.includes(t) ||
+            fecha.includes(t) ||
+            valor.includes(t)
+          );
+        }}
       />
       
       <DetailModal

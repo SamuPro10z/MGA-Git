@@ -55,6 +55,7 @@ export const GenericList = ({
   showDeleteButton = true,
   showCancelButton = true,
   showViewButton = true,
+  customSearch, // Optional: (row, searchTerm) => boolean
 }) => {
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(5)
@@ -143,7 +144,11 @@ export const GenericList = ({
   const filteredData = data.filter((row) => {
     // Search term filter
     const matchesSearch =
-      !searchTerm || columns.some((column) => String(row[column.id]).toLowerCase().includes(searchTerm.toLowerCase()))
+      !searchTerm || (
+        typeof customSearch === 'function'
+          ? customSearch(row, searchTerm)
+          : columns.some((column) => String(row[column.id]).toLowerCase().includes(searchTerm.toLowerCase()))
+      )
 
     // Status filter (legacy)
     let matchesStatus = true

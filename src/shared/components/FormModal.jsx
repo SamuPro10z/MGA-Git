@@ -34,6 +34,9 @@ export const FormModal = ({
   open,
   onClose,
   onSubmit,
+  onClearForm,
+  disableBackdropClick = true,
+  disableEscapeKeyDown = true,
   submitButtonText = "Guardar Cambios",
 }) => {
   const [formData, setFormData] = useState({})
@@ -481,11 +484,20 @@ export const FormModal = ({
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={(event, reason) => {
+        if (disableBackdropClick && reason === 'backdropClick') {
+          return
+        }
+        if (disableEscapeKeyDown && reason === 'escapeKeyDown') {
+          return
+        }
+        if (typeof onClose === 'function') {
+          onClose()
+        }
+      }}
       maxWidth="md"
       fullWidth
-      disableEscapeKeyDown={true}
-      onBackdropClick={() => {}} // Prevenir cierre al hacer clic fuera
+      disableEscapeKeyDown={disableEscapeKeyDown}
       PaperProps={{
         sx: {
           borderRadius: "8px",
@@ -587,6 +599,28 @@ export const FormModal = ({
           >
             Cancelar
           </Button>
+          {onClearForm && (
+            <Button
+              onClick={onClearForm}
+              variant="outlined"
+              size="small"
+              sx={{ 
+                borderRadius: "4px", 
+                px: 2,
+                py: 0.5,
+                fontSize: '0.875rem',
+                minHeight: '30px',
+                color: '#f44336',
+                borderColor: '#f44336',
+                '&:hover': {
+                  borderColor: '#d32f2f',
+                  backgroundColor: 'rgba(244, 67, 54, 0.04)'
+                }
+              }}
+            >
+              Limpiar
+            </Button>
+          )}
           {initialData && initialData._id && title && title.includes('Usuario') && (
             <Button
               onClick={() => onClose('assignRoles')}
