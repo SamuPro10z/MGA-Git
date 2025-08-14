@@ -790,10 +790,10 @@ const Beneficiarios = () => {
       ],
       required: true 
     },
-    { id: 'numeroDocumento', label: 'N° Documento', type: 'text', required: true },
+    { id: 'numeroDocumento', label: 'N° Documento', type: 'text', required: true, maxLength: 15 },
     { id: 'fechaNacimiento', label: 'Fecha de Nacimiento', type: 'date', required: true },
     { id: 'direccion', label: 'Dirección', type: 'text', required: true },
-    { id: 'telefono', label: 'Teléfono', type: 'text', required: true },
+    { id: 'telefono', label: 'Teléfono', type: 'text', required: true, maxLength: 15 },
     { id: 'correo', label: 'Correo Electrónico', type: 'email', required: true },
     { id: 'estado', label: 'Estado', type: 'switch', defaultValue: true }
   ];
@@ -1051,6 +1051,7 @@ const Beneficiarios = () => {
             label: 'N° Documento', 
             type: 'text', 
             required: true,
+            maxLength: 15,
             validation: (value) => {
               if (!value || value.trim().length === 0) {
                 return 'El número de documento es requerido';
@@ -1092,6 +1093,7 @@ const Beneficiarios = () => {
             label: 'Teléfono', 
             type: 'text', 
             required: true,
+            maxLength: 15,
             onChange: (value, formData, setFieldValue) => {
               setFormData(prev => ({ ...prev, telefono: value }));
               setFieldValue('telefono', value);
@@ -1124,6 +1126,7 @@ const Beneficiarios = () => {
             label: 'Contraseña', 
             type: 'password', 
             required: true, 
+            maxLength: 15,
             validation: (value) => {
               if (!value || value.length === 0) {
                 return 'La contraseña es requerida';
@@ -1178,6 +1181,7 @@ const Beneficiarios = () => {
             label: 'Confirmar Contraseña', 
             type: 'password', 
             required: true, 
+            maxLength: 15,
             placeholder: 'Confirme su contraseña',
             validation: (value, formData) => {
               if (!value || value.length === 0) {

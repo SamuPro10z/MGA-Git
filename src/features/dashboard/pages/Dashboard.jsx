@@ -24,6 +24,9 @@ import {
   Select,
   MenuItem,
 } from "@mui/material"
+import { alpha } from "@mui/material"
+import { Badge } from "@mui/material"
+import { useAuth } from "../../../features/auth/context/AuthContext"
 import {
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
@@ -31,6 +34,9 @@ import {
   MusicNote as MusicNoteIcon,
   AccessTime as AccessTimeIcon,
   Room as RoomIcon,
+  Person as PersonIcon,
+  Group as GroupIcon,
+  Assignment as AssignmentIcon,
 } from "@mui/icons-material"
 import {
   LineChart,
@@ -44,147 +50,280 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts"
+import axios from "axios"
 
-// Datos de ejemplo para el dashboard con año y mes
-const mockProfesores = [
-  { id: 1, nombre: "María González", estudiantes: 28, imagen: null, especialidad: "Piano", year: 2024, mes: "Junio" },
-  { id: 2, nombre: "Carlos Rodríguez", estudiantes: 24, imagen: null, especialidad: "Guitarra", year: 2024, mes: "Junio" },
-  { id: 3, nombre: "Ana Martínez", estudiantes: 22, imagen: null, especialidad: "Violín", year: 2024, mes: "Junio" },
-  { id: 4, nombre: "Juan López", estudiantes: 19, imagen: null, especialidad: "Canto", year: 2024, mes: "Junio" },
-  { id: 5, nombre: "Laura Sánchez", estudiantes: 17, imagen: null, especialidad: "Batería", year: 2024, mes: "Junio" },
-  // Datos para 2023
-  { id: 6, nombre: "María González", estudiantes: 25, imagen: null, especialidad: "Piano", year: 2023, mes: "Junio" },
-  { id: 7, nombre: "Carlos Rodríguez", estudiantes: 22, imagen: null, especialidad: "Guitarra", year: 2023, mes: "Junio" },
+// Utilidades
+const API_BASE = "http://localhost:3000/api"
+const MONTHS = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
 ]
 
-const mockCursos = [
-  { id: 1, nombre: "Guitarra para principiantes", estudiantes: 45, ingresos: 4500, year: 2024, mes: "Junio" },
-  { id: 2, nombre: "Piano avanzado", estudiantes: 32, ingresos: 5600, year: 2024, mes: "Junio" },
-  { id: 3, nombre: "Canto y técnica vocal", estudiantes: 28, ingresos: 3800, year: 2024, mes: "Junio" },
-  { id: 4, nombre: "Violín intermedio", estudiantes: 24, ingresos: 3200, year: 2024, mes: "Junio" },
-  { id: 5, nombre: "Batería básica", estudiantes: 20, ingresos: 2800, year: 2024, mes: "Junio" },
-  // Datos para 2023
-  { id: 6, nombre: "Guitarra para principiantes", estudiantes: 40, ingresos: 4000, year: 2023, mes: "Junio" },
-  { id: 7, nombre: "Piano avanzado", estudiantes: 30, ingresos: 5200, year: 2023, mes: "Junio" },
-]
+const dayToLetter = (dayIndex) => {
+  return ["D", "L", "M", "X", "J", "V", "S"][dayIndex]
+}
 
-const mockDesertores = [
-  { mes: "Enero", cantidad: 5, year: 2024 },
-  { mes: "Febrero", cantidad: 3, year: 2024 },
-  { mes: "Marzo", cantidad: 7, year: 2024 },
-  { mes: "Abril", cantidad: 4, year: 2024 },
-  { mes: "Mayo", cantidad: 6, year: 2024 },
-  { mes: "Junio", cantidad: 8, year: 2024 },
-  // Datos para 2023
-  { mes: "Enero", cantidad: 4, year: 2023 },
-  { mes: "Febrero", cantidad: 2, year: 2023 },
-  { mes: "Marzo", cantidad: 6, year: 2023 },
-  { mes: "Abril", cantidad: 3, year: 2023 },
-  { mes: "Mayo", cantidad: 5, year: 2023 },
-  { mes: "Junio", cantidad: 7, year: 2023 },
-]
+const letterToDayName = (letter) => {
+  const map = { D: "Domingo", L: "Lunes", M: "Martes", X: "Miércoles", J: "Jueves", V: "Viernes", S: "Sábado" }
+  return map[letter] || letter
+}
 
-const mockIngresos = [
-  { mes: "Enero", ingresos: 12500, year: 2024 },
-  { mes: "Febrero", ingresos: 14200, year: 2024 },
-  { mes: "Marzo", ingresos: 15800, year: 2024 },
-  { mes: "Abril", ingresos: 13600, year: 2024 },
-  { mes: "Mayo", ingresos: 16900, year: 2024 },
-  { mes: "Junio", ingresos: 18200, year: 2024 },
-  // Datos para 2023
-  { mes: "Enero", ingresos: 11000, year: 2023 },
-  { mes: "Febrero", ingresos: 13000, year: 2023 },
-  { mes: "Marzo", ingresos: 14500, year: 2023 },
-  { mes: "Abril", ingresos: 12800, year: 2023 },
-  { mes: "Mayo", ingresos: 15500, year: 2023 },
-  { mes: "Junio", ingresos: 17000, year: 2023 },
-]
-
-const mockClasesHoy = [
-  { id: 1, hora: "09:00", curso: "Piano avanzado", profesor: "María González", aula: "A101" },
-  { id: 2, hora: "10:30", curso: "Guitarra para principiantes", profesor: "Carlos Rodríguez", aula: "B202" },
-  { id: 3, hora: "12:00", curso: "Canto y técnica vocal", profesor: "Ana Martínez", aula: "C303" },
-  { id: 4, hora: "15:30", curso: "Violín intermedio", profesor: "Juan López", aula: "A105" },
-  { id: 5, hora: "17:00", curso: "Batería básica", profesor: "Laura Sánchez", aula: "D404" },
-]
+// Color por especialidad (paleta compañía)
+const getClassColor = (especialidad) => {
+  const colors = [
+    "#0455a2", // primary
+    "#6c8221",
+    "#5c6bc0",
+    "#26a69a",
+    "#ec407a",
+    "#0288d1",
+    "#7cb342",
+  ]
+  if (!especialidad) return colors[0]
+  let hash = 0
+  for (let i = 0; i < especialidad.length; i++) {
+    hash = especialidad.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  const idx = Math.abs(hash) % colors.length
+  return colors[idx]
+}
 
 // Colores para los gráficos
 const COLORS = ["#0455a2", "#6c8221", "#5c6bc0", "#26a69a", "#ec407a"]
 
 const Dashboard = () => {
   const theme = useTheme()
+  const { user } = useAuth?.() || { user: null }
   const [loading, setLoading] = useState(true)
   
-  // Set previous year as default instead of current year
-  const currentYear = new Date().getFullYear()
-  const [selectedYear, setSelectedYear] = useState(currentYear - 1)
-  
-  // Add month filter state
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const [selectedYear, setSelectedYear] = useState(currentYear)
   const [selectedMonth, setSelectedMonth] = useState("all")
   
-  // Obtener el mes actual en español
-  const currentMonth = new Date().toLocaleString('es-ES', { month: 'long' })
-  
-  // Simular carga de datos
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(false)
-    }, 1000)
+  // Datos crudos
+  const [pagos, setPagos] = useState([])
+  const [ventas, setVentas] = useState([])
+  const [programaciones, setProgramaciones] = useState([])
+  const [programacionesProfesores, setProgramacionesProfesores] = useState([])
 
-    return () => clearTimeout(timer)
+  // Carga paralela de datos necesarios
+  useEffect(() => {
+    let cancelled = false
+    const fetchAll = async () => {
+      try {
+        setLoading(true)
+        const [pagosRes, ventasRes, progsRes, progsProfRes] = await Promise.all([
+          axios.get(`${API_BASE}/pagos`).catch(() => ({ data: null })),
+          axios.get(`${API_BASE}/ventas`).catch(() => ({ data: [] })),
+          axios.get(`${API_BASE}/programacion_de_clases`).catch(() => ({ data: [] })),
+          axios.get(`${API_BASE}/programacion_de_profesores`).catch(() => ({ data: [] })),
+        ])
+
+        if (cancelled) return
+
+        const pagosData = pagosRes?.data?.data || pagosRes?.data || []
+        setPagos(Array.isArray(pagosData) ? pagosData : [])
+        setVentas(Array.isArray(ventasRes?.data) ? ventasRes.data : [])
+        setProgramaciones(Array.isArray(progsRes?.data) ? progsRes.data : [])
+        setProgramacionesProfesores(Array.isArray(progsProfRes?.data) ? progsProfRes.data : [])
+      } catch (e) {
+        setPagos([])
+        setVentas([])
+        setProgramaciones([])
+        setProgramacionesProfesores([])
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    fetchAll()
+    return () => {
+      cancelled = true
+    }
   }, [])
   
-  // Obtener años disponibles de los datos
+  // Años disponibles a partir de pagos y ventas
   const availableYears = useMemo(() => {
     const years = new Set()
-    mockDesertores.forEach(item => years.add(item.year))
-    mockIngresos.forEach(item => years.add(item.year))
-    return Array.from(years).sort((a, b) => b - a) // Ordenar descendente
-  }, [])
-  
-  // Add the missing availableMonths definition
-  const availableMonths = useMemo(() => {
-    return [
-      { value: "all", label: "Todos los meses" },
-      { value: "Enero", label: "Enero" },
-      { value: "Febrero", label: "Febrero" },
-      { value: "Marzo", label: "Marzo" },
-      { value: "Abril", label: "Abril" },
-      { value: "Mayo", label: "Mayo" },
-      { value: "Junio", label: "Junio" },
-      { value: "Julio", label: "Julio" },
-      { value: "Agosto", label: "Agosto" },
-      { value: "Septiembre", label: "Septiembre" },
-      { value: "Octubre", label: "Octubre" },
-      { value: "Noviembre", label: "Noviembre" },
-      { value: "Diciembre", label: "Diciembre" }
-    ]
-  }, [])
-  
-  // Update filtering logic to include month filter
-  const filteredProfesores = useMemo(() => {
-    let filtered = mockProfesores.filter(item => item.year === selectedYear)
-    if (selectedMonth !== "all") {
-      filtered = filtered.filter(item => item.mes === selectedMonth)
+    // Derivados de datos
+    pagos.forEach((p) => {
+      const d = p.fechaPago ? new Date(p.fechaPago) : (p.createdAt ? new Date(p.createdAt) : null)
+      if (d) years.add(d.getFullYear())
+    })
+    ventas.forEach((v) => {
+      const d = v.fechaInicio ? new Date(v.fechaInicio) : (v.createdAt ? new Date(v.createdAt) : null)
+      if (d) years.add(d.getFullYear())
+    })
+    programaciones.forEach((pr) => {
+      const d = pr.createdAt ? new Date(pr.createdAt) : null
+      if (d) years.add(d.getFullYear())
+    })
+    // Asegurar al menos los últimos 5 años
+    for (let y = currentYear; y >= currentYear - 4; y -= 1) {
+      years.add(y)
     }
-    return filtered
-  }, [selectedYear, selectedMonth])
+    const list = Array.from(years)
+    return list.sort((a, b) => b - a)
+  }, [pagos, ventas, programaciones, currentYear])
   
-  const filteredCursos = useMemo(() => 
-    mockCursos.filter(item => item.year === selectedYear), 
-  [selectedYear])
+  const availableMonths = useMemo(() => {
+    return [{ value: "all", label: "Todos los meses" }, ...MONTHS.map((m) => ({ value: m, label: m }))]
+  }, [])
   
-  const filteredDesertores = useMemo(() => 
-    mockDesertores.filter(item => item.year === selectedYear), 
-  [selectedYear])
-  
-  const filteredIngresos = useMemo(() => 
-    mockIngresos.filter(item => item.year === selectedYear), 
-  [selectedYear])
+  // Profesores con más estudiantes (conteo de beneficiarios en programaciones)
+  const profesoresRanking = useMemo(() => {
+    const byProfesor = new Map()
+    for (const prog of programaciones) {
+      // Filtrar por año/mes usando createdAt
+      const d = prog.createdAt ? new Date(prog.createdAt) : null
+      if (!d || d.getFullYear() !== selectedYear) continue
+      if (selectedMonth !== "all") {
+        const monthName = MONTHS[d.getMonth()]
+        if (monthName !== selectedMonth) continue
+      }
+      // Considerar solo programaciones activas
+      if (prog.estado && prog.estado !== "programada") continue
+      const prof = prog?.programacionProfesor?.profesor
+      if (!prof) continue
+      const profesorId = prof._id
+      const profesorNombre = [prof.nombres, prof.apellidos].filter(Boolean).join(" ") || "Profesor"
+      const especialidad = Array.isArray(prof.especialidades) && prof.especialidades.length > 0 ? prof.especialidades[0] : "General"
+      const beneficiariosCount = Array.isArray(prog?.beneficiarios) ? prog.beneficiarios.length : 0
+      const prev = byProfesor.get(profesorId) || { id: profesorId, nombre: profesorNombre, especialidad, estudiantes: 0 }
+      prev.estudiantes += beneficiariosCount
+      byProfesor.set(profesorId, prev)
+    }
+    const list = Array.from(byProfesor.values()).sort((a, b) => b.estudiantes - a.estudiantes)
+    return list.map((p, idx) => ({ id: idx + 1, ...p }))
+  }, [programaciones, selectedYear, selectedMonth])
 
-  // Calcular totales con datos filtrados
-  const totalDesertores = filteredDesertores.reduce((sum, item) => sum + item.cantidad, 0)
-  const totalIngresos = filteredIngresos.reduce((sum, item) => sum + item.ingresos, 0)
+  // Top cursos e ingresos por curso (a partir de ventas)
+  const cursosAggreg = useMemo(() => {
+    const byCurso = new Map()
+    for (const v of ventas) {
+      if (v?.tipo !== "curso") continue
+      if (v?.estado === "anulada") continue
+      const d = v.fechaInicio ? new Date(v.fechaInicio) : (v.createdAt ? new Date(v.createdAt) : null)
+      if (!d) continue
+      if (d.getFullYear() !== selectedYear) continue
+    if (selectedMonth !== "all") {
+        const monthName = MONTHS[d.getMonth()]
+        if (monthName !== selectedMonth) continue
+      }
+      const nombreCurso = typeof v.cursoId === "object" && v.cursoId?.nombre ? v.cursoId.nombre : "Curso"
+      const key = v.cursoId?._id || nombreCurso
+      const prev = byCurso.get(key) || { id: key, nombre: nombreCurso, estudiantes: 0, ingresos: 0 }
+      prev.estudiantes += 1
+      prev.ingresos += Number(v.valor_total || 0)
+      byCurso.set(key, prev)
+    }
+    const list = Array.from(byCurso.values()).sort((a, b) => b.estudiantes - a.estudiantes).slice(0, 5)
+    return list.map((c, idx) => ({ id: idx + 1, ...c }))
+  }, [ventas, selectedYear, selectedMonth])
+
+  // Desertores por mes: usar ventas anuladas como proxy
+  const desertoresPorMes = useMemo(() => {
+    const counts = Array(12).fill(0)
+    for (const v of ventas) {
+      if (v?.estado !== "anulada") continue
+      const d = v.fechaInicio ? new Date(v.fechaInicio) : (v.createdAt ? new Date(v.createdAt) : null)
+      if (!d) continue
+      if (d.getFullYear() !== selectedYear) continue
+      counts[d.getMonth()] += 1
+    }
+    const data = counts.map((cantidad, idx) => ({ mes: MONTHS[idx], cantidad, year: selectedYear }))
+    return data
+  }, [ventas, selectedYear])
+
+  // Ingresos por mes desde ventas de cursos
+  const ingresosPorMes = useMemo(() => {
+    const sums = Array(12).fill(0)
+    for (const v of ventas) {
+      // Solo considerar ventas de tipo curso y que no estén anuladas
+      if (v?.tipo !== "curso") continue
+      if (v?.estado === "anulada") continue
+      
+      // Determinar la fecha a usar para el filtro
+      const d = v.fechaInicio ? new Date(v.fechaInicio) : (v.createdAt ? new Date(v.createdAt) : null)
+      if (!d) continue
+      if (d.getFullYear() !== selectedYear) continue
+      
+      // Sumar el valor total al mes correspondiente
+      sums[d.getMonth()] += Number(v.valor_total || 0)
+    }
+    const data = sums.map((ingresos, idx) => ({ mes: MONTHS[idx], ingresos, year: selectedYear }))
+    return data
+  }, [ventas, selectedYear])
+
+  // Clases activas del día (mismo criterio que ProgramacionClases)
+  const clasesActivas = useMemo(() => {
+    const todayLetter = dayToLetter(new Date().getDay())
+    const list = programaciones
+      .filter((p) => {
+        // Solo programadas del día actual
+        if (p.estado && p.estado !== "programada") return false
+        if (p.dia && p.dia !== todayLetter) return false
+        // Evitar entradas incompletas
+        if (!p.especialidad || !p.horaInicio || !p.horaFin) return false
+        // Requerir profesor poblado como en ProgramacionClases
+        if (!p?.programacionProfesor?.profesor) return false
+        // Requerir al menos un beneficiario
+        if (!Array.isArray(p?.beneficiarios) || p.beneficiarios.length === 0) return false
+        // Filtro de seguridad por rol, igual a ProgramacionClases
+        if (user?.role === 'profesor') {
+          const prof = p?.programacionProfesor?.profesor
+          const profesorEmail = prof?.email || prof?.correo
+          if (profesorEmail && user?.email && profesorEmail !== user.email) return false
+        }
+        return true
+      })
+      .sort((a, b) => (a.horaInicio || '').localeCompare(b.horaInicio || ''))
+      .map((p, idx) => {
+        // Profesor está poblado (requerido por filtro)
+        const prof = p?.programacionProfesor?.profesor
+        const profesorNombre = [prof?.nombres, prof?.apellidos].filter(Boolean).join(" ") || "Profesor"
+        const cursoNombre = Array.isArray(p?.beneficiarios) && p.beneficiarios[0]?.cursoId?.nombre
+          ? p.beneficiarios[0].cursoId.nombre
+          : p.especialidad || "Curso"
+        const aulaNombre = p?.aula?.numeroAula || p?.aula?._id || "-"
+        return {
+          id: p._id || idx,
+          horaInicio: p.horaInicio || "",
+          horaFin: p.horaFin || "",
+          curso: cursoNombre,
+          profesor: profesorNombre,
+          aula: aulaNombre,
+          dia: p.dia || null,
+          estudiantes: Array.isArray(p?.beneficiarios) ? p.beneficiarios.length : 0,
+          especialidad: p.especialidad || null,
+        }
+      })
+    return list
+  }, [programaciones, user])
+
+  // Filtros y totales
+  const filteredDesertores = useMemo(() => {
+    if (selectedMonth === "all") return desertoresPorMes
+    return desertoresPorMes.filter((d) => d.mes === selectedMonth)
+  }, [desertoresPorMes, selectedMonth])
+
+  const filteredIngresos = useMemo(() => {
+    if (selectedMonth === "all") return ingresosPorMes
+    return ingresosPorMes.filter((d) => d.mes === selectedMonth)
+  }, [ingresosPorMes, selectedMonth])
+
+  const totalDesertores = filteredDesertores.reduce((sum, item) => sum + (item.cantidad || 0), 0)
+  const totalIngresos = filteredIngresos.reduce((sum, item) => sum + (item.ingresos || 0), 0)
 
   return (
     <Box sx={{ p: 3 }}>
@@ -241,7 +380,7 @@ const Dashboard = () => {
               </Typography>
             </Box>
             <List sx={{ flexGrow: 1 }}>
-              {filteredProfesores.map((profesor) => (
+              {profesoresRanking.map((profesor) => (
                 <ListItem
                   key={profesor.id}
                   sx={{
@@ -251,7 +390,7 @@ const Dashboard = () => {
                   }}
                 >
                   <ListItemAvatar>
-                    <Avatar sx={{ bgcolor: COLORS[profesor.id % COLORS.length] }}>
+                    <Avatar sx={{ bgcolor: getClassColor(profesor.especialidad) }}>
                       {profesor.imagen ? (
                         <img src={profesor.imagen || "/placeholder.svg"} alt={profesor.nombre} />
                       ) : (
@@ -312,7 +451,7 @@ const Dashboard = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {filteredCursos.map((curso) => (
+                    {cursosAggreg.map((curso) => (
                       <TableRow key={curso.id}>
                         <TableCell>
                           <Box sx={{ display: "flex", alignItems: "center" }}>
@@ -329,7 +468,7 @@ const Dashboard = () => {
               </TableContainer>
               <Box sx={{ mt: 3, height: 250 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={filteredCursos} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <BarChart data={cursosAggreg} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis 
                       dataKey="nombre" 
@@ -414,7 +553,7 @@ const Dashboard = () => {
           >
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
               <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                Ingresos de cursos por mes
+                Ingresos de cursos por mes {selectedMonth !== "all" ? `(${selectedMonth} ${selectedYear})` : `(${selectedYear})`}
               </Typography>
             </Box>
             <Box sx={{ display: "flex", alignItems: "center", mb: 3 }}>
@@ -449,7 +588,7 @@ const Dashboard = () => {
           </Paper>
         </Grid>
 
-        {/* Clases del día */}
+        {/* Clases activas */}
         <Grid item xs={12}>
           <Paper
             elevation={0}
@@ -461,7 +600,7 @@ const Dashboard = () => {
           >
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
               <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                Clases del día
+                Clases activas
               </Typography>
               <Box sx={{ display: "flex", alignItems: "center" }}>
                 <EventIcon sx={{ mr: 1 }} />
@@ -475,55 +614,61 @@ const Dashboard = () => {
                 </Typography>
               </Box>
             </Box>
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 600 }}>Hora</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Curso</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Profesor</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Aula</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>
-                      Estado
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {mockClasesHoy.map((clase) => (
-                    <TableRow key={clase.id}>
-                      <TableCell>
-                        <Box sx={{ display: "flex", alignItems: "center" }}>
-                          <AccessTimeIcon sx={{ mr: 1, fontSize: 18, color: "#0455a2" }} />
-                          {clase.hora}
-                        </Box>
-                      </TableCell>
-                      <TableCell>{clase.curso}</TableCell>
-                      <TableCell>{clase.profesor}</TableCell>
-                      <TableCell>
-                        <Box sx={{ display: "flex", alignItems: "center" }}>
-                          <RoomIcon sx={{ mr: 1, fontSize: 18, color: "#6c8221" }} />
-                          {clase.aula}
-                        </Box>
-                      </TableCell>
-                      <TableCell align="right">
+            <List sx={{ p: 0 }}>
+              {clasesActivas.map((clase) => (
+                <ListItem key={clase.id} sx={{ px: 0, py: 1.2, borderBottom: "1px solid rgba(0,0,0,0.06)", alignItems: "stretch" }}>
+                  <Box sx={{ display: "flex", alignItems: "stretch", width: "100%", gap: 2 }}>
                         <Chip
-                          label={
-                            new Date().getHours() >= Number.parseInt(clase.hora.split(":")[0])
-                              ? "Completada"
-                              : "Pendiente"
-                          }
+                      icon={<AccessTimeIcon />}
+                      label={`${clase.horaInicio || ""}${clase.horaFin ? ` - ${clase.horaFin}` : ""}`}
                           size="small"
-                          color={
-                            new Date().getHours() >= Number.parseInt(clase.hora.split(":")[0]) ? "success" : "primary"
-                          }
-                          variant="outlined"
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                      sx={{ minWidth: 130, bgcolor: alpha("#0455a2", 0.08), color: "#0455a2", alignSelf: "center" }}
+                    />
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        flexGrow: 1,
+                        p: 1.2,
+                        bgcolor: alpha(getClassColor(clase.especialidad), 0.08),
+                        borderLeft: `4px solid ${getClassColor(clase.especialidad)}`,
+                        borderRadius: 1,
+                      }}
+                    >
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.3 }}>
+                        {clase.curso}
+                      </Typography>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
+                        <Typography variant="caption" sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                          <PersonIcon fontSize="inherit" />
+                          {clase.profesor}
+                        </Typography>
+                        <Typography variant="caption" sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                          <AssignmentIcon fontSize="inherit" />
+                          Aula: {clase.aula}
+                        </Typography>
+                        {clase.dia && (
+                          <Typography variant="caption">{letterToDayName(clase.dia)}</Typography>
+                        )}
+                        <Typography variant="caption" sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                          <GroupIcon fontSize="inherit" />
+                          <Badge
+                            badgeContent={clase.estudiantes}
+                            color="primary"
+                            sx={{ "& .MuiBadge-badge": { fontSize: "0.65rem", height: 16, minWidth: 16 } }}
+                          >
+                            <span style={{ fontSize: "0.75rem" }}>Estudiantes</span>
+                          </Badge>
+                        </Typography>
+                      </Box>
+                    </Paper>
+                    <Chip label="Activa" size="small" color="primary" variant="outlined" sx={{ alignSelf: "center" }} />
+                  </Box>
+                </ListItem>
+              ))}
+              {clasesActivas.length === 0 && (
+                <Typography variant="body2" color="text.secondary">No hay clases activas en el periodo seleccionado.</Typography>
+              )}
+            </List>
           </Paper>
         </Grid>
       </Grid>
