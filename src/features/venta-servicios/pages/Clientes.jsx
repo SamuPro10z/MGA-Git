@@ -4,6 +4,8 @@ import { GenericList } from '../../../shared/components/GenericList';
 import { DetailModal } from '../../../shared/components/DetailModal';
 import { FormModal } from '../../../shared/components/FormModal';
 import { StatusButton } from '../../../shared/components/StatusButton';
+import AlertDialog from '../../../shared/components/AlertDialog';
+import { Snackbar, Alert } from '@mui/material';
 
 const Clientes = () => {
   const [clientes, setClientes] = useState([]);
@@ -12,6 +14,27 @@ const Clientes = () => {
   const [formModalOpen, setFormModalOpen] = useState(false);
   const [formData, setFormData] = useState({});
   const [isEditing, setIsEditing] = useState(false);
+  const [alertDialog, setAlertDialog] = useState({
+    open: false,
+    title: '',
+    message: '',
+    onConfirm: null
+  });
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success'
+  });
+
+  // Utilidad: formatea una fecha (ISO o Date) al formato requerido por inputs type="date" (yyyy-MM-dd)
+  const formatDateForInput = (dateLike) => {
+    if (!dateLike) return '';
+    const date = new Date(dateLike);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
 
   useEffect(() => {
     fetchClientes();
@@ -66,24 +89,42 @@ const Clientes = () => {
   };
 
   const handleEdit = (cliente) => {
-    setIsEditing(true);
-    // Mapear los campos del cliente a los IDs de los campos del formulario
-    const clienteMapeado = {
-      id: cliente.id,
-      nombre: cliente.nombre,
-      apellido: cliente.apellido,
-      tipo_de_documento: cliente.tipoDocumento,
-      numero_de_documento: cliente.numeroDocumento,
-      fechaDeNacimiento: cliente.fechaNacimiento,
-      direccion: cliente.direccion,
-      telefono: cliente.telefono,
-      correo: cliente.correo,
-      esBeneficiario: cliente.esBeneficiario || false,
-      estado: cliente.estado,
-      // No incluimos contraseña ni confirmar_contraseña ya que son campos que se llenarán solo si se quieren cambiar
-    };
-    setSelectedCliente(clienteMapeado);
-    setFormModalOpen(true);
+    try {
+      if (!cliente) {
+        setSnackbar({
+          open: true,
+          message: 'Error: No se pudo cargar el cliente para editar.',
+          severity: 'error'
+        });
+        return;
+      }
+      setIsEditing(true);
+      // Mapear los campos del cliente a los IDs de los campos del formulario
+      const clienteMapeado = {
+        id: cliente.id,
+        nombre: cliente.nombre,
+        apellido: cliente.apellido,
+        tipo_de_documento: cliente.tipoDocumento,
+        numero_de_documento: cliente.numeroDocumento,
+        // El formulario de fecha requiere formato yyyy-MM-dd
+        fechaDeNacimiento: formatDateForInput(cliente.fechaNacimiento),
+        direccion: cliente.direccion,
+        telefono: cliente.telefono,
+        correo: cliente.correo,
+        esBeneficiario: cliente.esBeneficiario || false,
+        estado: cliente.estado,
+        // No incluimos contraseña ni confirmar_contraseña ya que son campos que se llenarán solo si se quieren cambiar
+      };
+      setSelectedCliente(clienteMapeado);
+      setFormModalOpen(true);
+    } catch (error) {
+      console.error('Error al editar cliente:', error);
+      setSnackbar({
+        open: true,
+        message: 'Error al cargar el formulario de edición.',
+        severity: 'error'
+      });
+    }
   };
 
   const handleSubmit = async (formData) => {
@@ -94,7 +135,25 @@ const Clientes = () => {
       // Validar que el número de documento tenga el formato correcto (6-15 dígitos)
       const numeroDocumentoLimpio = formDataSinConfirmacion.numero_de_documento.toString().replace(/\D/g, '');
       if (numeroDocumentoLimpio.length < 6 || numeroDocumentoLimpio.length > 15) {
-        alert('El número de documento debe tener entre 6 y 15 dígitos numéricos.');
+        setAlertDialog({
+          open: true,
+          title: 'Error de validación',
+          message: 'El número de documento debe tener entre 6 y 15 dígitos numéricos.',
+          onConfirm: null
+        });
+        return;
+      }
+      
+      // Validar que la fecha de nacimiento no sea del año actual o futuro
+      const fechaNacimiento = new Date(formDataSinConfirmacion.fechaDeNacimiento);
+      const añoActual = new Date().getFullYear();
+      if (fechaNacimiento.getFullYear() >= añoActual) {
+        setAlertDialog({
+          open: true,
+          title: 'Error de validación',
+          message: 'La fecha de nacimiento no puede ser del año actual o futuro.',
+          onConfirm: null
+        });
         return;
       }
       
@@ -113,6 +172,7 @@ const Clientes = () => {
             fechaDeNacimiento: formDataSinConfirmacion.fechaDeNacimiento,
             direccion: formDataSinConfirmacion.direccion,
             telefono: formDataSinConfirmacion.telefono,
+            correo: formDataSinConfirmacion.correo,
             esBeneficiario: formDataSinConfirmacion.esBeneficiario || false
           });
           
@@ -123,9 +183,29 @@ const Clientes = () => {
           const usuarioHasRolResponse = await axios.get(`http://localhost:3000/api/usuarios_has_rol/${beneficiario.usuario_has_rolId}`);
           const usuarioHasRol = usuarioHasRolResponse.data;
           
+          // Asegurar que usamos un ID (string) y no un objeto poblado
+          const usuarioId = typeof usuarioHasRol?.usuarioId === 'string'
+            ? usuarioHasRol.usuarioId
+            : usuarioHasRol?.usuarioId?._id;
+
           // Obtener los datos actuales del usuario
-          const usuarioResponse = await axios.get(`http://localhost:3000/api/usuarios/${usuarioHasRol.usuarioId}`);
-          const usuarioActual = usuarioResponse.data.usuario;
+          const usuarioResponse = await axios.get(`http://localhost:3000/api/usuarios/${usuarioId}`);
+          console.log('Respuesta de usuario completa:', usuarioResponse.data);
+          
+          // Verificar la estructura de la respuesta
+          let usuarioActual;
+          if (usuarioResponse.data && usuarioResponse.data.usuario) {
+            usuarioActual = usuarioResponse.data.usuario;
+            console.log('Usando usuario desde usuarioResponse.data.usuario');
+          } else if (usuarioResponse.data && typeof usuarioResponse.data === 'object') {
+            usuarioActual = usuarioResponse.data;
+            console.log('Usando usuario directamente desde usuarioResponse.data');
+          } else {
+            console.error('Estructura de respuesta de usuario inesperada:', usuarioResponse.data);
+            throw new Error('Formato de respuesta de usuario inesperado');
+          }
+          
+          console.log('Usuario actual:', usuarioActual);
           
           // Preparar los datos de actualización manteniendo los valores existentes
           const usuarioUpdateData = {
@@ -134,9 +214,13 @@ const Clientes = () => {
             tipo_de_documento: formDataSinConfirmacion.tipo_de_documento,
             documento: numeroDocumentoLimpio, // Usar el valor ya validado y limpiado
             correo: formDataSinConfirmacion.correo,
-            estado: usuarioActual.estado,
-            rol: usuarioActual.rol // Mantener el rol existente
+            estado: usuarioActual.estado || true
           };
+          
+          // Solo agregar el rol si existe en el usuario actual
+          if (usuarioActual.rol) {
+            usuarioUpdateData.rol = usuarioActual.rol;
+          }
           
           // Agregar contraseña solo si se proporcionó una nueva
           if (formDataSinConfirmacion.contrasena) {
@@ -144,7 +228,7 @@ const Clientes = () => {
           }
           
           // Actualizar el usuario con todos los datos necesarios
-          await axios.put(`http://localhost:3000/api/usuarios/${usuarioHasRol.usuarioId}`, usuarioUpdateData);
+          await axios.put(`http://localhost:3000/api/usuarios/${usuarioId}`, usuarioUpdateData);
         } catch (error) {
           console.error('Error al actualizar el cliente:', error);
           throw error; // Re-lanzar el error para que sea capturado por el catch exterior
@@ -233,8 +317,10 @@ const Clientes = () => {
           telefono: formDataSinConfirmacion.telefono,
           direccion: formDataSinConfirmacion.direccion,
           fechaDeNacimiento: formDataSinConfirmacion.fechaDeNacimiento,
+          correo: formDataSinConfirmacion.correo,
           usuario_has_rolId: usuario_has_rolId,
-          clienteId: 'cliente' // Default value
+          clienteId: 'cliente', // Default value
+          estado: true // Asegurar que el beneficiario se crea activo
         };
         
         console.log('Datos del beneficiario a crear:', beneficiarioData);
@@ -250,6 +336,13 @@ const Clientes = () => {
 
       fetchClientes();
       handleCloseForm();
+      
+      // Mostrar alerta de éxito
+      setSnackbar({
+        open: true,
+        message: isEditing ? 'Cliente actualizado correctamente.' : 'Cliente creado correctamente.',
+        severity: 'success'
+      });
     } catch (error) {
       console.error('Error al guardar el cliente:', error);
       
@@ -262,37 +355,70 @@ const Clientes = () => {
           status: error.response.status,
           headers: error.response.headers
         });
-        alert(`Error ${error.response.status}: ${error.response.data.message || 'Error al guardar el cliente'}`);
+        setSnackbar({
+          open: true,
+          message: `Error ${error.response.status}: ${error.response.data.message || 'Error al guardar el cliente'}`,
+          severity: 'error'
+        });
       } else if (error.request) {
         // La solicitud fue realizada pero no se recibió respuesta
         console.error('Error de solicitud:', error.request);
-        alert('No se recibió respuesta del servidor. Verifique su conexión.');
+        setSnackbar({
+          open: true,
+          message: 'No se recibió respuesta del servidor. Verifique su conexión.',
+          severity: 'error'
+        });
       } else {
         // Algo ocurrió al configurar la solicitud que desencadenó un error
         console.error('Error de configuración:', error.message);
         console.error('Stack trace:', error.stack);
-        alert(`Error: ${error.message}`);
+        setSnackbar({
+          open: true,
+          message: `Error: ${error.message}`,
+          severity: 'error'
+        });
       }
     }
   };
 
   const handleDelete = async (cliente) => {
-    const confirmDelete = window.confirm(`¿Está seguro de eliminar el cliente ${cliente.nombre}?`);
-    if (confirmDelete) {
-      try {
-        await axios.delete(`http://localhost:3000/api/beneficiarios/${cliente.id}`);
-        fetchClientes();
-      } catch (error) {
-        console.error('Error al eliminar el cliente:', error);
-        
-        // Mostrar mensaje de error específico si el cliente está asociado a ventas
-        if (error.response && error.response.status === 400) {
-          // Asegurarse de que se muestra el mensaje correcto
-          const errorMessage = 'No se puede eliminar el cliente porque está asociado a una venta de curso o matrícula';
-          alert(errorMessage);
-        } else {
-          alert('Error al eliminar el cliente. Por favor, inténtelo de nuevo.');
-        }
+    setAlertDialog({
+      open: true,
+      title: 'Confirmar eliminación',
+      message: `¿Está seguro de eliminar el cliente ${cliente.nombre}?`,
+      onConfirm: () => confirmDeleteCliente(cliente)
+    });
+  };
+  
+  const confirmDeleteCliente = async (cliente) => {
+    setAlertDialog(prev => ({ ...prev, open: false }));
+    try {
+      await axios.delete(`http://localhost:3000/api/beneficiarios/${cliente.id}`);
+      fetchClientes();
+      // Notificación de éxito
+      setSnackbar({
+        open: true,
+        message: 'Cliente eliminado correctamente.',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error al eliminar el cliente:', error);
+      
+      // Mostrar mensaje de error específico si el cliente está asociado a ventas
+      if (error.response && error.response.status === 400) {
+        // Asegurarse de que se muestra el mensaje correcto
+        const errorMessage = 'No se puede eliminar el cliente porque está asociado a una venta de curso o matrícula';
+        setSnackbar({
+          open: true,
+          message: errorMessage,
+          severity: 'error'
+        });
+      } else {
+        setSnackbar({
+          open: true,
+          message: 'Error al eliminar el cliente. Por favor, inténtelo de nuevo.',
+          severity: 'error'
+        });
       }
     }
   };
@@ -392,6 +518,14 @@ const Clientes = () => {
     }
   }, [selectedCliente?.fechaNacimiento]);
 
+  const handleCloseSnackbar = () => {
+    setSnackbar(prev => ({ ...prev, open: false }));
+  };
+
+  const handleCloseAlertDialog = () => {
+    setAlertDialog(prev => ({ ...prev, open: false }));
+  };
+
   return (
     <>
       <GenericList
@@ -429,25 +563,35 @@ const Clientes = () => {
             type: 'password', 
             required: !isEditing, 
             section: 'datos_contacto',
+            maxLength: 15,
             validate: (value) => {
-              if (!value) return null; // La validación de campo requerido ya se maneja automáticamente
+              // Si estamos editando y no se proporciona valor, no validamos
+              if (isEditing && !value) return null;
               
-              if (value.length < 8) {
-                return 'La contraseña debe tener al menos 8 caracteres';
-              }
-              
-              // Verificar que contenga al menos una letra mayúscula, una minúscula y un número
-              const hasUpperCase = /[A-Z]/.test(value);
-              const hasLowerCase = /[a-z]/.test(value);
-              const hasNumber = /[0-9]/.test(value);
-              
-              if (!hasUpperCase || !hasLowerCase || !hasNumber) {
-                return 'La contraseña debe contener al menos una letra mayúscula, una minúscula y un número';
+              // Si no estamos editando o se proporciona un valor, validamos
+              if (!isEditing || value) {
+                if (value.length < 8) {
+                  return 'La contraseña debe tener al menos 8 caracteres';
+                }
+                
+                if (value.length > 15) {
+                  return 'La contraseña no debe exceder los 15 caracteres';
+                }
+                
+                // Verificar que contenga al menos una letra mayúscula, una minúscula y un número
+                const hasUpperCase = /[A-Z]/.test(value);
+                const hasLowerCase = /[a-z]/.test(value);
+                const hasNumber = /[0-9]/.test(value);
+                
+                if (!hasUpperCase || !hasLowerCase || !hasNumber) {
+                  return 'La contraseña debe contener al menos una letra mayúscula, una minúscula y un número';
+                }
               }
               
               return null;
             },
-            validateOnChange: true
+            validateOnChange: true,
+            helperText: isEditing ? 'Dejar en blanco para mantener la contraseña actual' : ''
           },
           { 
             id: 'confirmar_contrasena', 
@@ -455,31 +599,25 @@ const Clientes = () => {
             type: 'password', 
             required: !isEditing, 
             section: 'datos_contacto',
+            maxLength: 15,
             validate: (value, formData) => {
-              if (!value) return null; // La validación de campo requerido ya se maneja automáticamente
+              // Si estamos editando y no hay contraseña nueva, no validamos
+              if (isEditing && !formData.contrasena) return null;
               
-              // Primero verificamos si la contraseña original cumple con los requisitos
-              const passwordValue = formData.contrasena || '';
-              if (passwordValue.length < 8) {
-                return 'La contraseña debe tener al menos 8 caracteres';
+              // Si no hay valor de confirmación pero la contraseña es requerida o se proporcionó una
+              if (!value && (!isEditing || formData.contrasena)) {
+                return 'Debe confirmar la contraseña';
               }
               
-              const hasUpperCase = /[A-Z]/.test(passwordValue);
-              const hasLowerCase = /[a-z]/.test(passwordValue);
-              const hasNumber = /[0-9]/.test(passwordValue);
-              
-              if (!hasUpperCase || !hasLowerCase || !hasNumber) {
-                return 'La contraseña debe contener al menos una letra mayúscula, una minúscula y un número';
-              }
-              
-              // Si la contraseña original es válida, verificamos que coincidan
-              if (value !== passwordValue) {
+              // Si hay valor de confirmación, validamos que coincida con la contraseña
+              if (value && value !== formData.contrasena) {
                 return 'Las contraseñas no coinciden';
               }
               
               return null;
             },
-            validateOnChange: true
+            validateOnChange: true,
+            helperText: isEditing ? 'Dejar en blanco si no cambia la contraseña' : ''
           },
           { 
             id: 'tipo_de_documento', 
@@ -495,13 +633,62 @@ const Clientes = () => {
               { value: 'NIT', label: 'NIT' }
             ]
           },
-          { id: 'numero_de_documento', label: 'Número de Documento', type: 'text', required: true, section: 'datos_personales' },
-          { id: 'telefono', label: 'Teléfono', type: 'text', required: true, section: 'datos_contacto' },
-          { id: 'direccion', label: 'Dirección', type: 'text', required: true, section: 'datos_contacto' },
-          { id: 'fechaDeNacimiento', label: 'Fecha de Nacimiento', type: 'date', required: true, section: 'datos_personales' },
+          { id: 'numero_de_documento', label: 'Número de Documento', type: 'text', required: true, section: 'datos_personales', maxLength: 15 },
+          { id: 'telefono', label: 'Teléfono', type: 'text', required: true, section: 'datos_contacto', maxLength: 15 },
+          { id: 'direccion', label: 'Dirección', type: 'text', required: true, section: 'datos_contacto', maxLength: 15 },
+          { 
+            id: 'fechaDeNacimiento', 
+            label: 'Fecha de Nacimiento', 
+            type: 'date', 
+            required: true, 
+            section: 'datos_personales',
+            validate: (value) => {
+              if (!value) return null; // La validación de campo requerido ya se maneja automáticamente
+              
+              const fechaNacimiento = new Date(value);
+              const añoActual = new Date().getFullYear();
+              
+              if (fechaNacimiento.getFullYear() >= añoActual) {
+                return 'La fecha de nacimiento no puede ser del año actual o futuro';
+              }
+              
+              return null;
+            },
+            validateOnChange: true
+          },
           { id: 'esBeneficiario', label: '¿Es también beneficiario?', type: 'checkbox', section: 'datos_adicionales' }
         ]}
       />
+
+      {/* Diálogo de alerta para confirmaciones y mensajes */}
+      <AlertDialog
+        open={alertDialog.open}
+        title={alertDialog.title}
+        message={alertDialog.message}
+        onClose={handleCloseAlertDialog}
+        onConfirm={alertDialog.onConfirm}
+      />
+
+      {/* Snackbar para notificaciones */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert 
+          onClose={handleCloseSnackbar} 
+          severity={snackbar.severity} 
+          variant="filled"
+          sx={{ 
+            minWidth: '250px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            borderRadius: '8px'
+          }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </>
   );
 };
