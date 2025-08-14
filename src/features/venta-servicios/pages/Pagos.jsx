@@ -1013,11 +1013,11 @@ const Pagos = () => {
         columns={columns}
         rowKey="_id" // Asegurarse de que esta prop esté presente
         onView={handleView}
-        onCreate={isCliente ? null : handleCreate}
         onExportPdf={handleExportExcel}
         title="Gestión de Pagos"
         showEditButton={false}
         showDeleteButton={false}
+        showCreateButton={false}
         showViewButton={true}
       />
       

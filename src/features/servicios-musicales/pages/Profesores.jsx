@@ -514,7 +514,9 @@ const Profesores = () => {
         id: 'identificacion',
         label: 'Número de Identificación *', 
         type: 'text',
-        required: true
+        required: true,
+        maxLength: 20,
+        helperText: 'Máximo 20 caracteres'
       },
       { 
         id: 'telefono', 

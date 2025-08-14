@@ -65,7 +65,15 @@ const Aulas = () => {
       type: 'number',
       required: true,
       min: 1,
-      max: 50
+      max: 50,
+      helperText: 'Mínimo 1, máximo 50 beneficiarios',
+      validateOnChange: true,
+      validate: (value) => {
+        const numValue = parseInt(value);
+        if (numValue < 1) return 'La capacidad debe ser al menos 1';
+        if (numValue > 50) return 'La capacidad no puede exceder 50';
+        return null;
+      }
     },
     { 
       id: 'estado', 
@@ -166,9 +174,19 @@ const Aulas = () => {
 
   const handleSubmit = async (formData) => {
     try {
+      // Validar que la capacidad esté dentro del rango permitido
+      const capacidad = parseInt(formData.capacidad);
+      if (capacidad < 1 || capacidad > 50) {
+        setAlert({
+          open: true,
+          message: 'La capacidad debe estar entre 1 y 50 beneficiarios'
+        });
+        return;
+      }
+
       const dataToSend = {
         numeroAula: formData.numeroAula,
-        capacidad: parseInt(formData.capacidad),
+        capacidad: capacidad,
         estado: formData.estado || 'Activo'
       };
 
